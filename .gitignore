@@ -15,6 +15,10 @@ eval*.json
 corpus/
 tokenizer/
 
+# GGUF exportado (grande)
+gguf/
+*.gguf
+
 # Modelos, checkpoints y adapters
 models/
 checkpoints/

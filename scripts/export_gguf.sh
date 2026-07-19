@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Exporta el NDX-Coder entrenado a GGUF y lo cuantiza para correr en CPU+RAM
+# (llama.cpp). Corre esto DESPUÉS de entrenar (con models/ndx-coder-small listo).
+#
+# Uso:  bash scripts/export_gguf.sh [MODEL_DIR] [OUT_DIR]
+set -euo pipefail
+
+MODEL_DIR="${1:-models/ndx-coder-small}"
+OUT_DIR="${2:-gguf}"
+LLAMA_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
+
+mkdir -p "$OUT_DIR"
+
+# 1. llama.cpp (clonar + build de las herramientas de cuantización si falta)
+if [ ! -d "$LLAMA_DIR" ]; then
+  echo ">> clonando llama.cpp en $LLAMA_DIR"
+  git clone https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
+fi
+pip install -q -r "$LLAMA_DIR/requirements.txt"
+
+# 2. HF -> GGUF (f16). El converter lee el tokenizer.json (BPE byte-level) y la
+#    arquitectura Llama de config.json.
+echo ">> convirtiendo a GGUF f16"
+python "$LLAMA_DIR/convert_hf_to_gguf.py" "$MODEL_DIR" \
+  --outfile "$OUT_DIR/ndx-coder-f16.gguf" --outtype f16
+
+# 3. Cuantizar (necesita el binario llama-quantize; build si no está)
+QUANT="$LLAMA_DIR/build/bin/llama-quantize"
+if [ ! -x "$QUANT" ]; then
+  echo ">> compilando herramientas de llama.cpp"
+  cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" -DLLAMA_CURL=OFF >/dev/null
+  cmake --build "$LLAMA_DIR/build" --target llama-quantize -j
+fi
+
+echo ">> cuantizando Q8_0 y Q4_K_M"
+"$QUANT" "$OUT_DIR/ndx-coder-f16.gguf" "$OUT_DIR/ndx-coder-Q8_0.gguf"   Q8_0
+"$QUANT" "$OUT_DIR/ndx-coder-f16.gguf" "$OUT_DIR/ndx-coder-Q4_K_M.gguf" Q4_K_M
+
+echo ""
+echo "Listo. Tamaños:"
+ls -lh "$OUT_DIR"/*.gguf | awk '{print "  "$5"\t"$9}'
+echo ""
+echo "Probar en CPU:  llama-cli -m $OUT_DIR/ndx-coder-Q4_K_M.gguf -p '<|user|>\\nModela...\\n<|assistant|>\\n'"
