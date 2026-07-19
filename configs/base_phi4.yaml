@@ -1,0 +1,11 @@
+# Base B del A/B — Phi-4-mini (3.8B, licencia MIT, no gated).
+extends: _common.yaml
+
+model:
+  name_or_path: microsoft/Phi-4-mini-instruct
+  trust_remote_code: true          # los Phi suelen requerirlo
+  attn_implementation: sdpa
+
+# 3.8B en bf16 cabe sobrado en 32GB → LoRA full-precision
+quantization:
+  load_in_4bit: false

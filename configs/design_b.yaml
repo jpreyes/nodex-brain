@@ -1,7 +1,7 @@
-# Run A/B — dominio DISEÑO (verificación por normas) con el base B.
-extends: base_12b_b.yaml
+# Run A/B — dominio DISEÑO (verificación por normas) con Phi-4-mini.
+extends: base_phi4.yaml
 
-run_name: nodex-design-B
+run_name: nodex-design-phi4
 
 data:
   dataset_dir: ../nodex-code/datasets/design-sft-4000

@@ -1,7 +1,7 @@
-# Run A/B — dominio DISEÑO (verificación por normas) con el base A.
-extends: base_12b_a.yaml
+# Run A/B — dominio DISEÑO (verificación por normas) con Gemma 4 E4B.
+extends: base_gemma4.yaml
 
-run_name: nodex-design-A
+run_name: nodex-design-gemma4
 
 data:
   dataset_dir: ../nodex-code/datasets/design-sft-4000

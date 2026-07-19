@@ -1,0 +1,12 @@
+# Base A del A/B — Gemma 4 E4B (~4B efectivo, licencia Gemma 4).
+# GATED en HF: acepta la licencia y `huggingface-cli login` antes de descargar.
+extends: _common.yaml
+
+model:
+  name_or_path: google/gemma-4-E4B-it
+  trust_remote_code: false
+  attn_implementation: eager        # recomendado para entrenar Gemma
+
+# 4B en bf16 cabe sobrado en 32GB → LoRA full-precision (mejor calidad que 4-bit)
+quantization:
+  load_in_4bit: false

@@ -10,15 +10,9 @@ lora:
   dropout: 0.05
   bias: none
   task_type: CAUSAL_LM
-  # Módulos estándar presentes tanto en Mistral como en Gemma 3.
-  target_modules:
-    - q_proj
-    - k_proj
-    - v_proj
-    - o_proj
-    - gate_proj
-    - up_proj
-    - down_proj
+  # "all-linear" → peft apunta a todas las capas lineales, robusto entre
+  # arquitecturas distintas (Gemma 4 / Phi-4) sin depender de nombres de módulo.
+  target_modules: all-linear
 
 data:
   max_seq_length: 2048

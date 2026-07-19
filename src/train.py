@@ -27,14 +27,20 @@ def _dtype(name: str) -> torch.dtype:
 
 def build_model_and_tokenizer(cfg: dict):
     model_cfg = cfg["model"]
-    q = cfg["quantization"]
+    q = cfg.get("quantization", {})
 
-    bnb = BitsAndBytesConfig(
-        load_in_4bit=q["load_in_4bit"],
-        bnb_4bit_quant_type=q["bnb_4bit_quant_type"],
-        bnb_4bit_use_double_quant=q["bnb_4bit_use_double_quant"],
-        bnb_4bit_compute_dtype=_dtype(q["bnb_4bit_compute_dtype"]),
-    )
+    # QLoRA (4-bit) solo si se pide; para ~4B en 32GB conviene LoRA en bf16.
+    quant_config = None
+    load_kwargs = {}
+    if q.get("load_in_4bit"):
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type=q["bnb_4bit_quant_type"],
+            bnb_4bit_use_double_quant=q["bnb_4bit_use_double_quant"],
+            bnb_4bit_compute_dtype=_dtype(q["bnb_4bit_compute_dtype"]),
+        )
+    else:
+        load_kwargs["dtype"] = torch.bfloat16
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_cfg["name_or_path"],
@@ -45,10 +51,11 @@ def build_model_and_tokenizer(cfg: dict):
 
     model = AutoModelForCausalLM.from_pretrained(
         model_cfg["name_or_path"],
-        quantization_config=bnb,
+        quantization_config=quant_config,
         device_map="auto",
         trust_remote_code=model_cfg.get("trust_remote_code", False),
         attn_implementation=model_cfg.get("attn_implementation", "sdpa"),
+        **load_kwargs,
     )
     model.config.use_cache = False
     return model, tokenizer
