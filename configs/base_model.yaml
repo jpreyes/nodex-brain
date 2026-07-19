@@ -1,0 +1,59 @@
+# Configuración base compartida por los entrenamientos QLoRA.
+# Los configs por dominio (qlora_*.yaml) heredan/oberescriben estos valores.
+
+# --- Modelo base ---
+model:
+  name_or_path: Qwen/Qwen2.5-7B-Instruct   # cambia por el base que uses
+  trust_remote_code: false
+  attn_implementation: flash_attention_2   # o "sdpa" si no hay flash-attn
+
+# --- Cuantización 4-bit (QLoRA / NF4) ---
+quantization:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16
+
+# --- Adapter LoRA ---
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+# --- Formato de datos ---
+data:
+  chat_template: auto        # usa el template del tokenizer
+  max_seq_length: 2048
+  train_split: train.jsonl
+  val_split: val.jsonl
+
+# --- Hiperparámetros de entrenamiento (defaults) ---
+train:
+  output_dir: adapters/
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  optim: paged_adamw_8bit
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 10
+  eval_strategy: steps
+  eval_steps: 100
+  save_strategy: steps
+  save_steps: 200
+  seed: 42
+  report_to: none            # "wandb" / "tensorboard" para logging

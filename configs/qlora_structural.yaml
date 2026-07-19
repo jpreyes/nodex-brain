@@ -1,0 +1,21 @@
+# Config de ejemplo: QLoRA para el dominio estructural.
+# Hereda base_model.yaml y sobreescribe lo específico del dataset.
+
+extends: base_model.yaml
+
+run_name: nodex-structural-qlora
+
+data:
+  dataset_dir: datasets/structural-sft-1000
+  train_split: train.jsonl
+  val_split: val.jsonl
+  max_seq_length: 2048
+
+lora:
+  r: 16
+  alpha: 32
+
+train:
+  output_dir: adapters/structural
+  num_train_epochs: 3
+  learning_rate: 2.0e-4

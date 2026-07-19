@@ -1,0 +1,30 @@
+# Nodex Brain — dependencias de fine-tuning QLoRA
+# Fija versiones exactas antes de producción; estos son mínimos recomendados.
+
+# Core LLM / fine-tuning
+torch>=2.3
+transformers>=4.44
+peft>=0.12          # LoRA / QLoRA
+trl>=0.9            # SFTTrainer
+accelerate>=0.33
+bitsandbytes>=0.43  # cuantización 4-bit (NF4)
+datasets>=2.20
+
+# Utilidades de entrenamiento
+sentencepiece>=0.2
+protobuf>=4.25
+safetensors>=0.4
+scipy>=1.13
+
+# Configuración y CLI
+pyyaml>=6.0
+tqdm>=4.66
+
+# Evaluación / logging (opcional)
+wandb>=0.17
+tensorboard>=2.17
+
+# Inferencia / serving (opcional — descomenta según despliegue)
+# vllm>=0.5
+# fastapi>=0.111
+# uvicorn>=0.30
