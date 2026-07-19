@@ -1,0 +1,11 @@
+# Run A/B — dominio DISEÑO (verificación por normas) con el base B.
+extends: base_12b_b.yaml
+
+run_name: nodex-design-B
+
+data:
+  dataset_dir: ../nodex-code/datasets/design-sft-4000
+
+train:
+  output_dir: adapters/design-B
+  num_train_epochs: 2        # subset A/B: basta para comparar el "feel"

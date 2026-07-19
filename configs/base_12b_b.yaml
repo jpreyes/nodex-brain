@@ -1,0 +1,17 @@
+# Base B del A/B — un ~12B instruct ALTERNATIVO (otra familia/licencia).
+#
+# ⚠️ REEMPLAZA `name_or_path` por el otro ~12B que quieras comparar (otra familia;
+#    puede ser gated → login HF + aceptar licencia). Mantén TODO lo demás igual
+#    que en base A: solo debe cambiar el modelo base, para que el A/B sea justo.
+extends: _common.yaml
+
+model:
+  name_or_path: "REEMPLAZAR/12b-instruct-alternativo"   # ~12B alternativo actual
+  trust_remote_code: false
+  attn_implementation: eager           # algunas familias entrenan mejor con eager
+
+quantization:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16

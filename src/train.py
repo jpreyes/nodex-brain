@@ -57,6 +57,7 @@ def build_model_and_tokenizer(cfg: dict):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Entrenamiento QLoRA de Nodex Brain")
     parser.add_argument("--config", required=True, help="Ruta al YAML de config")
+    parser.add_argument("--subset", type=int, default=None, help="Usar solo N ejemplos (A/B rápido)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -72,7 +73,9 @@ def main() -> None:
         target_modules=lora_cfg["target_modules"],
     )
 
-    dataset = load_splits(cfg)   # los base instruct (Gemma/Mistral) traen chat_template
+    dataset = load_splits(cfg)   # los base instruct traen su chat_template
+    if args.subset:
+        dataset["train"] = dataset["train"].select(range(min(args.subset, len(dataset["train"]))))
 
     t = cfg["train"]
     sft_config = SFTConfig(
