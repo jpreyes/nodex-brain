@@ -39,8 +39,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Smoke-test + throughput de NDX-Coder")
     parser.add_argument("--config", required=True)
     parser.add_argument("--steps", type=int, default=30, help="Pasos de optimización a medir")
-    parser.add_argument("--batch", type=int, default=4, help="per_device_train_batch_size")
+    parser.add_argument("--batch", type=int, default=2, help="per_device_train_batch_size")
     parser.add_argument("--subset", type=int, default=600, help="Ejemplos de train a cargar")
+    parser.add_argument("--seq", type=int, default=1024, help="max_length (XPU: baja para no OOM)")
+    parser.add_argument("--optim", default="adafactor", help="optimizador (adafactor ahorra VRAM)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -55,13 +57,14 @@ def main() -> None:
     ds = load_dataset("json", data_files={"train": cfg["data"]["train"]})["train"]
     ds = ds.select(range(min(args.subset, len(ds))))
 
-    seq_len = cfg["data"]["max_seq_length"]
+    seq_len = args.seq
     sft = SFTConfig(
         output_dir="models/_smoke",
         max_steps=args.steps,
         per_device_train_batch_size=args.batch,
         gradient_accumulation_steps=1,
         gradient_checkpointing=True,      # realista para 8 GB compartidos
+        optim=args.optim,                 # adafactor ≈ sin estados → ahorra VRAM
         packing=True,
         max_length=seq_len,
         bf16=(dev != "cpu"),
