@@ -82,6 +82,17 @@ Esto entrena ambos, imprime loss/perplejidad por modelo y genera
 > distintos; úsala como proxy de progreso. La decisión "cuál es mejor" apóyala en
 > `compare.py` (revisión humana) y/o una métrica a nivel de tarea.
 
+## Verificador (nodex-compiler)
+
+`src/compiler.py` valida código NDX compilándolo + resolviéndolo con el
+`nodex-compiler` (repo hermano en `../nodex-compiler`). Es la base del eval por
+compilación y del loop de auto-mejora. Requiere Node y el WASM de Nodex.
+
+```bash
+# resolución del CLI:  NODEXC_CLI  →  ../nodex-compiler/src/cli.js  →  nodexc en PATH
+python -m src.compiler deck.ndx        # {"ok": true/false, "error": ...}
+```
+
 ## Notas
 
 - Los datasets, modelos, checkpoints y adapters no se versionan (ver `.gitignore`).
