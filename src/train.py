@@ -18,7 +18,7 @@ from transformers import (
 from trl import SFTConfig, SFTTrainer
 
 from .config import load_config
-from .data import build_formatter, load_splits
+from .data import load_splits
 
 
 def _dtype(name: str) -> torch.dtype:
@@ -72,8 +72,7 @@ def main() -> None:
         target_modules=lora_cfg["target_modules"],
     )
 
-    dataset = load_splits(cfg)
-    formatter = build_formatter(tokenizer, cfg)
+    dataset = load_splits(cfg)   # los base instruct (Gemma/Mistral) traen chat_template
 
     t = cfg["train"]
     sft_config = SFTConfig(
@@ -96,7 +95,7 @@ def main() -> None:
         save_steps=t["save_steps"],
         seed=t["seed"],
         report_to=t.get("report_to", "none"),
-        max_seq_length=cfg["data"]["max_seq_length"],
+        max_length=cfg["data"]["max_seq_length"],
     )
 
     trainer = SFTTrainer(
@@ -105,7 +104,6 @@ def main() -> None:
         train_dataset=dataset["train"],
         eval_dataset=dataset.get("validation"),
         peft_config=peft_config,
-        formatting_func=formatter,
         processing_class=tokenizer,
     )
 
