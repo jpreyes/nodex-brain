@@ -65,8 +65,10 @@ def main() -> None:
             refs.append(next(m["content"] for m in msgs if m["role"] == "assistant"))
 
     ok = 0
+    total = len(prompts)
+    print(f"Generando y compilando {total} ejemplos en {device}...", flush=True)
     dump_fh = open(args.dump, "w", encoding="utf-8") if args.dump else None
-    for prompt, ref in zip(prompts, refs):
+    for idx, (prompt, ref) in enumerate(zip(prompts, refs), 1):
         text = f"<|user|>\n{prompt}\n<|assistant|>\n"
         inputs = tokenizer(text, return_tensors="pt").to(model.device)
         with torch.no_grad():
@@ -82,6 +84,7 @@ def main() -> None:
         deck = extract_deck(completion)
         v = validate(deck)
         ok += int(v.ok)
+        print(f"  [{idx}/{total}] ok={v.ok}  compile_rate={ok/idx:.1%}", flush=True)
         if dump_fh:
             dump_fh.write(json.dumps(
                 {"prompt": prompt, "deck": deck, "ok": v.ok, "error": v.error},
