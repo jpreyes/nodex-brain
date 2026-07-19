@@ -30,10 +30,18 @@ def pick_device() -> str:
 
 
 def extract_deck(text: str) -> str:
-    """Quita el scratchpad: devuelve lo que va después de </think> (o todo)."""
+    """Extrae el deck: quita el scratchpad y corta en la 1ª línea `solve ...`
+    (fin natural del deck). Así un modelo que aún no aprende a parar y sigue
+    generando basura no invalida un deck por lo demás correcto — es lo que
+    haría el harness real (parar tras `solve`)."""
     if "</think>" in text:
         text = text.split("</think>", 1)[1]
-    return text.strip()
+    lines = []
+    for ln in text.strip().splitlines():
+        lines.append(ln)
+        if ln.strip().startswith("solve "):
+            break
+    return "\n".join(lines).strip()
 
 
 def main() -> None:
@@ -90,6 +98,7 @@ def main() -> None:
                 {"prompt": prompt, "deck": deck, "ok": v.ok, "error": v.error},
                 ensure_ascii=False,
             ) + "\n")
+            dump_fh.flush()   # visible al instante, no al cerrar
 
     if dump_fh:
         dump_fh.close()
