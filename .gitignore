@@ -1,0 +1,48 @@
+# === Nodex Brain ===
+
+# Instrucciones internas (privadas, no versionar)
+CLAUDE.md
+
+# Datasets (grandes / privados)
+datasets/
+*.jsonl
+
+# Modelos, checkpoints y adapters
+models/
+checkpoints/
+adapters/
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.ckpt
+lora/
+qlora/
+wandb/
+
+# Entornos y dependencias
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# Configuración local y secretos
+.env
+.env.*
+*.local
+secrets/
+*.key
+
+# Cachés de Hugging Face / datasets
+.cache/
+hf_cache/
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
