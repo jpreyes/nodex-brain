@@ -11,6 +11,10 @@ datasets/
 compare*.md
 eval*.json
 
+# Corpus y tokenizer (derivados de datasets privados)
+corpus/
+tokenizer/
+
 # Modelos, checkpoints y adapters
 models/
 checkpoints/

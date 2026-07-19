@@ -16,6 +16,9 @@ protobuf>=4.25
 safetensors>=0.4
 scipy>=1.13
 
+# Tokenizer propio (NDX-Coder from-scratch)
+tokenizers>=0.19
+
 # Configuración y CLI
 pyyaml>=6.0
 tqdm>=4.66

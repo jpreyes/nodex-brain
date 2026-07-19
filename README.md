@@ -82,6 +82,31 @@ Esto entrena ambos, imprime loss/perplejidad por modelo y genera
 > distintos; úsala como proxy de progreso. La decisión "cuál es mejor" apóyala en
 > `compare.py` (revisión humana) y/o una métrica a nivel de tarea.
 
+## NDX-Coder (modelo pequeño desde cero)
+
+Modelo ~215M **entrenado desde cero** (init aleatorio, tokenizer propio) que traduce
+`español → código NDX` con scratchpad `<think>`. Objetivo: correr en CPU+RAM (≤300 MB
+tras exportar a GGUF). Métrica dura: **% de decks que compilan** (`src/compiler.py`).
+
+```bash
+# 1) Cosechar corpus (tokenizer + decks) desde el dataset con scratchpad
+python -m src.harvest_ndx \
+    --datasets ../nodex-code/datasets/generator-combined-cot-sft-40185/train.jsonl \
+    --out-corpus corpus/tokenizer.txt --out-decks corpus/ndx_decks.txt
+
+# 2) Entrenar el tokenizer BPE byte-level propio (~6-16k, con <think>/</think>)
+python -m src.tokenizer_train --corpus corpus/tokenizer.txt --out tokenizer/ndx
+
+# 3) Entrenar el modelo DESDE CERO (GPU) — full fine-tune, sin QLoRA
+python -m src.train_scratch --config configs/ndx_coder.yaml
+
+# 4) Evaluar por compilación (genera → extrae deck tras </think> → compila)
+python -m src.eval_coder --config configs/ndx_coder.yaml --model models/ndx-coder-small --n 200
+```
+
+Pasos 1–2 corren en CPU (local); 3–4 necesitan GPU. Config en
+[`configs/ndx_coder.yaml`](configs/ndx_coder.yaml).
+
 ## Verificador (nodex-compiler)
 
 `src/compiler.py` valida código NDX compilándolo + resolviéndolo con el
