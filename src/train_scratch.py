@@ -72,6 +72,8 @@ def main() -> None:
     parser.add_argument("--optim", default=None, help="adafactor ahorra VRAM (iGPU 8GB)")
     parser.add_argument("--no-packing", action="store_true", help="XPU/CPU: sin flash-attn, evita contaminación")
     parser.add_argument("--seq", type=int, default=None, help="Override de max_length")
+    parser.add_argument("--batch", type=int, default=None, help="Override batch (iGPU: 1-2)")
+    parser.add_argument("--grad-ckpt", action="store_true", help="Fuerza gradient checkpointing (iGPU)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -93,7 +95,7 @@ def main() -> None:
         run_name=cfg.get("run_name"),
         num_train_epochs=t["num_train_epochs"],
         max_steps=args.max_steps if args.max_steps else -1,
-        per_device_train_batch_size=t["per_device_train_batch_size"],
+        per_device_train_batch_size=args.batch or t["per_device_train_batch_size"],
         gradient_accumulation_steps=t["gradient_accumulation_steps"],
         learning_rate=float(t["learning_rate"]),
         lr_scheduler_type=t["lr_scheduler_type"],
@@ -101,7 +103,7 @@ def main() -> None:
         weight_decay=t["weight_decay"],
         optim=args.optim or t.get("optim", "adamw_torch"),
         bf16=t["bf16"],
-        gradient_checkpointing=t["gradient_checkpointing"],
+        gradient_checkpointing=args.grad_ckpt or t["gradient_checkpointing"],
         packing=t.get("packing", True) and not args.no_packing,
         max_length=args.seq or cfg["data"]["max_seq_length"],
         logging_steps=t["logging_steps"],
