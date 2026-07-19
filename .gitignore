@@ -7,6 +7,10 @@ CLAUDE.md
 datasets/
 *.jsonl
 
+# Salidas de evaluación/comparación (contienen datos de los datasets)
+compare*.md
+eval*.json
+
 # Modelos, checkpoints y adapters
 models/
 checkpoints/

@@ -1,26 +1,16 @@
-# Configuración base compartida por los entrenamientos QLoRA.
-# Los configs por dominio (qlora_*.yaml) heredan/oberescriben estos valores.
+# Defaults compartidos por todos los entrenamientos (SIN modelo base).
+# Cadena de herencia:
+#   runs (*_mistral.yaml / *_gemma.yaml)  →  base_*.yaml (modelo)  →  _common.yaml
+# Mantener aquí lo que debe ser IDÉNTICO entre Mistral y Gemma para que
+# la comparación A/B sea justa (LoRA + hiperparámetros de entrenamiento).
 
-# --- Modelo base ---
-model:
-  name_or_path: Qwen/Qwen2.5-7B-Instruct   # cambia por el base que uses
-  trust_remote_code: false
-  attn_implementation: flash_attention_2   # o "sdpa" si no hay flash-attn
-
-# --- Cuantización 4-bit (QLoRA / NF4) ---
-quantization:
-  load_in_4bit: true
-  bnb_4bit_quant_type: nf4
-  bnb_4bit_use_double_quant: true
-  bnb_4bit_compute_dtype: bfloat16
-
-# --- Adapter LoRA ---
 lora:
   r: 16
   alpha: 32
   dropout: 0.05
   bias: none
   task_type: CAUSAL_LM
+  # Módulos estándar presentes tanto en Mistral como en Gemma 3.
   target_modules:
     - q_proj
     - k_proj
@@ -30,16 +20,12 @@ lora:
     - up_proj
     - down_proj
 
-# --- Formato de datos ---
 data:
-  chat_template: auto        # usa el template del tokenizer
   max_seq_length: 2048
   train_split: train.jsonl
   val_split: val.jsonl
 
-# --- Hiperparámetros de entrenamiento (defaults) ---
 train:
-  output_dir: adapters/
   num_train_epochs: 3
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
