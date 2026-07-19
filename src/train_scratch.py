@@ -66,6 +66,12 @@ def build_model(cfg: dict, vocab_size: int) -> LlamaForCausalLM:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Entrena NDX-Coder desde cero")
     parser.add_argument("--config", required=True)
+    # Overrides (útiles para experimentos rápidos / entrenar en la iGPU)
+    parser.add_argument("--subset", type=int, default=None, help="Usar solo N ejemplos de train")
+    parser.add_argument("--max-steps", type=int, default=None, help="Cortar a N pasos (ignora epochs)")
+    parser.add_argument("--optim", default=None, help="adafactor ahorra VRAM (iGPU 8GB)")
+    parser.add_argument("--no-packing", action="store_true", help="XPU/CPU: sin flash-attn, evita contaminación")
+    parser.add_argument("--seq", type=int, default=None, help="Override de max_length")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -78,24 +84,28 @@ def main() -> None:
         "json",
         data_files={"train": cfg["data"]["train"], "validation": cfg["data"]["val"]},
     )
+    if args.subset:
+        dataset["train"] = dataset["train"].select(range(min(args.subset, len(dataset["train"]))))
 
     t = cfg["train"]
     sft_config = SFTConfig(
         output_dir=t["output_dir"],
         run_name=cfg.get("run_name"),
         num_train_epochs=t["num_train_epochs"],
+        max_steps=args.max_steps if args.max_steps else -1,
         per_device_train_batch_size=t["per_device_train_batch_size"],
         gradient_accumulation_steps=t["gradient_accumulation_steps"],
         learning_rate=float(t["learning_rate"]),
         lr_scheduler_type=t["lr_scheduler_type"],
         warmup_ratio=t["warmup_ratio"],
         weight_decay=t["weight_decay"],
+        optim=args.optim or t.get("optim", "adamw_torch"),
         bf16=t["bf16"],
         gradient_checkpointing=t["gradient_checkpointing"],
-        packing=t.get("packing", True),
-        max_length=cfg["data"]["max_seq_length"],
+        packing=t.get("packing", True) and not args.no_packing,
+        max_length=args.seq or cfg["data"]["max_seq_length"],
         logging_steps=t["logging_steps"],
-        eval_strategy=t["eval_strategy"],
+        eval_strategy=t["eval_strategy"] if not args.max_steps else "no",
         eval_steps=t["eval_steps"],
         save_strategy=t["save_strategy"],
         save_steps=t["save_steps"],

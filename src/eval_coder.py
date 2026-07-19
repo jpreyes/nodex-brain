@@ -39,7 +39,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Eval por compilación de NDX-Coder")
     parser.add_argument("--config", required=True)
     parser.add_argument("--model", required=True, help="Directorio del modelo entrenado")
-    parser.add_argument("--n", type=int, default=200, help="Prompts de val a evaluar")
+    parser.add_argument("--n", type=int, default=200, help="Prompts a evaluar")
+    parser.add_argument("--data", default=None, help="JSONL a evaluar (def: el val del config)")
     parser.add_argument("--max-new-tokens", type=int, default=768)
     parser.add_argument("--dump", default=None, help="Escribe generaciones a un .jsonl")
     args = parser.parse_args()
@@ -53,7 +54,8 @@ def main() -> None:
     model.eval()
 
     prompts, refs = [], []
-    with open(cfg["data"]["val"], encoding="utf-8") as fh:
+    data_path = args.data or cfg["data"]["val"]
+    with open(data_path, encoding="utf-8") as fh:
         for i, line in enumerate(fh):
             if i >= args.n:
                 break
