@@ -3,7 +3,9 @@ extends: _common.yaml
 
 model:
   name_or_path: microsoft/Phi-4-mini-instruct
-  trust_remote_code: true          # los Phi suelen requerirlo
+  # trust_remote_code: false → usa el Phi3 NATIVO de transformers 5
+  # (el modeling remoto importa LossKwargs, roto en transformers 5).
+  trust_remote_code: false
   attn_implementation: sdpa
 
 # 3.8B en bf16 cabe sobrado en 32GB → LoRA full-precision
