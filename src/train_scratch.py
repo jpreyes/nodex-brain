@@ -19,6 +19,19 @@ from .config import load_config
 
 CHAT_SPECIALS = ["<|user|>", "<|assistant|>", "<think>", "</think>"]
 
+# Chat template propio → produce: <|user|>\n{u}\n<|assistant|>\n{a}<eos>
+# (TRL 1.x / transformers 5 formatean datasets `messages` vía este template)
+CHAT_TEMPLATE = (
+    "{% for message in messages %}"
+    "{% if message['role'] == 'user' %}"
+    "<|user|>\n{{ message['content'] }}\n"
+    "{% elif message['role'] == 'assistant' %}"
+    "<|assistant|>\n{{ message['content'] }}{{ eos_token }}"
+    "{% endif %}"
+    "{% endfor %}"
+    "{% if add_generation_prompt %}<|assistant|>\n{% endif %}"
+)
+
 
 def build_tokenizer(tokenizer_dir: str) -> PreTrainedTokenizerFast:
     tok = PreTrainedTokenizerFast(
@@ -29,6 +42,7 @@ def build_tokenizer(tokenizer_dir: str) -> PreTrainedTokenizerFast:
         bos_token=None,
         additional_special_tokens=CHAT_SPECIALS,
     )
+    tok.chat_template = CHAT_TEMPLATE
     return tok
 
 
@@ -65,13 +79,6 @@ def main() -> None:
         data_files={"train": cfg["data"]["train"], "validation": cfg["data"]["val"]},
     )
 
-    def formatting_func(example):
-        # SFTTrainer pasa el ejemplo; devolvemos el texto completo con el template propio.
-        msgs = example["messages"]
-        user = next(m["content"] for m in msgs if m["role"] == "user")
-        asst = next(m["content"] for m in msgs if m["role"] == "assistant")
-        return f"<|user|>\n{user}\n<|assistant|>\n{asst}{tokenizer.eos_token}"
-
     t = cfg["train"]
     sft_config = SFTConfig(
         output_dir=t["output_dir"],
@@ -86,7 +93,7 @@ def main() -> None:
         bf16=t["bf16"],
         gradient_checkpointing=t["gradient_checkpointing"],
         packing=t.get("packing", True),
-        max_seq_length=cfg["data"]["max_seq_length"],
+        max_length=cfg["data"]["max_seq_length"],
         logging_steps=t["logging_steps"],
         eval_strategy=t["eval_strategy"],
         eval_steps=t["eval_steps"],
@@ -101,7 +108,6 @@ def main() -> None:
         args=sft_config,
         train_dataset=dataset["train"],
         eval_dataset=dataset["validation"],
-        formatting_func=formatting_func,
         processing_class=tokenizer,
     )
     trainer.train()

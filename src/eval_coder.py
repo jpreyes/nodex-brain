@@ -20,6 +20,14 @@ from .compiler import validate
 from .config import load_config
 
 
+def pick_device() -> str:
+    if hasattr(torch, "xpu") and torch.xpu.is_available():
+        return "xpu"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
 def extract_deck(text: str) -> str:
     """Quita el scratchpad: devuelve lo que va después de </think> (o todo)."""
     if "</think>" in text:
@@ -37,10 +45,11 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    device = pick_device()
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     model = AutoModelForCausalLM.from_pretrained(
-        args.model, torch_dtype=torch.bfloat16, device_map="auto"
-    )
+        args.model, dtype=torch.bfloat16
+    ).to(device)
     model.eval()
 
     prompts, refs = [], []
