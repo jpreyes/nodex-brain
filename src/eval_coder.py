@@ -14,10 +14,11 @@ import argparse
 import json
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM
 
 from .compiler import validate
 from .config import load_config
+from .train_scratch import build_tokenizer
 
 
 def pick_device() -> str:
@@ -47,7 +48,7 @@ def main() -> None:
 
     cfg = load_config(args.config)
     device = pick_device()
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    tokenizer = build_tokenizer(cfg["tokenizer"])   # tokenizer custom (evita AutoTokenizer)
     model = AutoModelForCausalLM.from_pretrained(
         args.model, dtype=torch.bfloat16
     ).to(device)
