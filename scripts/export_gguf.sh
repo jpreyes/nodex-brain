@@ -18,6 +18,13 @@ if [ ! -d "$LLAMA_DIR" ]; then
 fi
 pip install -q -r "$LLAMA_DIR/requirements.txt"
 
+# 1b. Parche: transformers 5 guarda el tokenizer con clase "TokenizersBackend",
+#     que el converter no sabe reinstanciar. La cambiamos a PreTrainedTokenizerFast.
+if grep -q '"TokenizersBackend"' "$MODEL_DIR/tokenizer_config.json" 2>/dev/null; then
+  echo ">> parcheando tokenizer_class -> PreTrainedTokenizerFast"
+  sed -i 's/"TokenizersBackend"/"PreTrainedTokenizerFast"/' "$MODEL_DIR/tokenizer_config.json"
+fi
+
 # 2. HF -> GGUF (f16). El converter lee el tokenizer.json (BPE byte-level) y la
 #    arquitectura Llama de config.json.
 echo ">> convirtiendo a GGUF f16"
