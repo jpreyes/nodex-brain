@@ -75,6 +75,7 @@ def main() -> None:
     m = cfg["model"]
     max_len = args.seq or cfg["data"]["max_seq_length"]
     pretrained = bool(m.get("name_or_path"))
+    tag = "tsd" if args.tsd else "base"
 
     if pretrained:
         tok = AutoTokenizer.from_pretrained(m["name_or_path"], trust_remote_code=m.get("trust_remote_code", False))
@@ -106,7 +107,6 @@ def main() -> None:
         m["attn_implementation"] = "eager"
         model = build_model(cfg, vocab_size=len(tok))
 
-    tag = "tsd" if args.tsd else "base"
     print(f"[{tag}] {'pretrained '+m['name_or_path'] if pretrained else 'from-scratch'} · "
           f"{sum(p.numel() for p in model.parameters())/1e6:.1f}M params")
 
