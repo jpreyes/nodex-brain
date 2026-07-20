@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from datasets import load_dataset
+from datasets import concatenate_datasets, load_dataset
 from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerFast
 from trl import SFTConfig, SFTTrainer
 
@@ -74,6 +74,8 @@ def main() -> None:
     parser.add_argument("--seq", type=int, default=None, help="Override de max_length")
     parser.add_argument("--batch", type=int, default=None, help="Override batch (iGPU: 1-2)")
     parser.add_argument("--grad-ckpt", action="store_true", help="Fuerza gradient checkpointing (iGPU)")
+    parser.add_argument("--repair-train", default=None, help="jsonl de repair-sft a MEZCLAR con generación (canal de reparación quirúrgica)")
+    parser.add_argument("--no-repair", action="store_true", help="ignora data.repair_train del config")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -88,6 +90,18 @@ def main() -> None:
     )
     if args.subset:
         dataset["train"] = dataset["train"].select(range(min(args.subset, len(dataset["train"]))))
+
+    # Mezcla del canal de REPARACIÓN quirúrgica (repair-sft) con la generación, mismo
+    # formato `messages` → el modelo aprende generar + reparar en un solo entrenamiento.
+    repair_path = None if args.no_repair else (args.repair_train or cfg["data"].get("repair_train"))
+    if repair_path:
+        only_msgs = lambda ds: ds.remove_columns([c for c in ds.column_names if c != "messages"])
+        rep = load_dataset("json", data_files={"train": repair_path})["train"]
+        gen_n = len(dataset["train"])
+        dataset["train"] = concatenate_datasets(
+            [only_msgs(dataset["train"]), only_msgs(rep)]
+        ).shuffle(seed=cfg["train"]["seed"])
+        print(f"mezcla: gen {gen_n} + repair {len(rep)} = {len(dataset['train'])} ejemplos")
 
     t = cfg["train"]
     sft_config = SFTConfig(

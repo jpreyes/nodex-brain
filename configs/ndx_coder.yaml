@@ -22,6 +22,8 @@ model:
 data:
   train: ../nodex-code/datasets/generator-combined-cot-sft-40185/train.jsonl
   val:   ../nodex-code/datasets/generator-combined-cot-sft-40185/val.jsonl
+  # canal de reparación quirúrgica (se MEZCLA con train; --no-repair lo desactiva)
+  repair_train: ../nodex-code/datasets/repair-sft/train.jsonl
   max_seq_length: 2048
 
 train:

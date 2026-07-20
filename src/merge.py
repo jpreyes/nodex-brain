@@ -21,6 +21,8 @@ def main() -> None:
     parser.add_argument("--config", required=True)
     parser.add_argument("--adapter", required=True, help="Directorio del adapter")
     parser.add_argument("--out", required=True, help="Directorio de salida del merge")
+    parser.add_argument("--device", default="auto",
+                        help="auto|cpu|cuda|xpu. Usa cpu si tu torch es +xpu y el base no cabe en la VRAM.")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -28,7 +30,8 @@ def main() -> None:
     trust = cfg["model"].get("trust_remote_code", False)
 
     base = AutoModelForCausalLM.from_pretrained(
-        base_name, device_map="auto", dtype=torch.bfloat16, trust_remote_code=trust,
+        base_name, device_map=args.device, dtype=torch.bfloat16,
+        low_cpu_mem_usage=True, trust_remote_code=trust,
     )
     model = PeftModel.from_pretrained(base, args.adapter)
     model = model.merge_and_unload()

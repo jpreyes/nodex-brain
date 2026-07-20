@@ -1,0 +1,33 @@
+# ndx-coder-qwen3-0.6b — Qwen3-0.6B-Base (Alibaba, Apache-2.0).
+# Fine-tune sobre codegen 36k + repair-sft. Se entrena con src.train_tsd (sin --tsd = producción).
+
+run_name: ndx-coder-qwen3-0.6b
+
+model:
+  name_or_path: Qwen/Qwen3-0.6B-Base
+  trust_remote_code: false
+
+data:
+  train: ../nodex-code/datasets/generator-combined-cot-sft-40185/train.jsonl
+  val:   ../nodex-code/datasets/generator-combined-cot-sft-40185/val.jsonl
+  repair_train: ../nodex-code/datasets/repair-sft/train.jsonl
+  max_seq_length: 2048
+
+train:
+  output_dir: models/ndx-coder-qwen3-0.6b
+  num_train_epochs: 3
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 4
+  learning_rate: 2.0e-4
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.03
+  weight_decay: 0.1
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 20
+  eval_strategy: steps
+  eval_steps: 200
+  save_strategy: steps
+  save_steps: 500
+  seed: 42
+  report_to: none
