@@ -18,6 +18,13 @@ if [ ! -d "$LLAMA_DIR" ]; then
 fi
 pip install -q -r "$LLAMA_DIR/requirements.txt"
 
+# 1a. Parche del converter: nuestro tokenizer es BPE byte-level (estilo GPT-2),
+#     pero su hash no está en la lista de llama.cpp → en vez de abortar, cae a
+#     "gpt-2" (el pre-tokenizer correcto para ByteLevel BPE).
+for f in $(grep -rl 'BPE pre-tokenizer was not recognized' "$LLAMA_DIR" 2>/dev/null); do
+  sed -i 's/raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")/res = "gpt-2"  # NDX-Coder ByteLevel BPE fallback/' "$f"
+done
+
 # 1b. Parche del tokenizer_config: transformers 5 lo guarda de forma que el
 #     converter de llama.cpp no puede recargarlo (clase "TokenizersBackend" y
 #     extra_special_tokens como lista en vez de dict). Lo normalizamos.
