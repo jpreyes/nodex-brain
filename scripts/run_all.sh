@@ -20,7 +20,9 @@ export PYTHONIOENCODING=utf-8    # logs con unicode robustos en cualquier consol
 MODE="${1:-full}"
 REMOTE="${2:-}"
 SMOKE_ARGS=""
-[ "$MODE" = "smoke" ] && SMOKE_ARGS="--subset 32 --max-steps 3 --batch 2"
+# --no-repair en smoke: el mixing añade los 54k de repair aunque --subset recorte la generación
+# → el smoke mapearía 54k. El mixing ya está validado; el smoke solo confirma carga+train+export.
+[ "$MODE" = "smoke" ] && SMOKE_ARGS="--subset 32 --max-steps 3 --batch 2 --no-repair"
 
 BRAIN="${BRAIN:-/workspace/nodex-brain}"
 CODE="${CODE:-/workspace/nodex-code}"
