@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 
+import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -24,13 +25,16 @@ def main() -> None:
 
     cfg = load_config(args.config)
     base_name = cfg["model"]["name_or_path"]
+    trust = cfg["model"].get("trust_remote_code", False)
 
-    base = AutoModelForCausalLM.from_pretrained(base_name, device_map="auto")
+    base = AutoModelForCausalLM.from_pretrained(
+        base_name, device_map="auto", dtype=torch.bfloat16, trust_remote_code=trust,
+    )
     model = PeftModel.from_pretrained(base, args.adapter)
     model = model.merge_and_unload()
 
     model.save_pretrained(args.out)
-    AutoTokenizer.from_pretrained(base_name).save_pretrained(args.out)
+    AutoTokenizer.from_pretrained(base_name, trust_remote_code=trust).save_pretrained(args.out)
     print(f"Modelo fusionado guardado en {args.out}")
 
 
