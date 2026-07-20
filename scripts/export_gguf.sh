@@ -18,12 +18,20 @@ if [ ! -d "$LLAMA_DIR" ]; then
 fi
 pip install -q -r "$LLAMA_DIR/requirements.txt"
 
-# 1b. Parche: transformers 5 guarda el tokenizer con clase "TokenizersBackend",
-#     que el converter no sabe reinstanciar. La cambiamos a PreTrainedTokenizerFast.
-if grep -q '"TokenizersBackend"' "$MODEL_DIR/tokenizer_config.json" 2>/dev/null; then
-  echo ">> parcheando tokenizer_class -> PreTrainedTokenizerFast"
-  sed -i 's/"TokenizersBackend"/"PreTrainedTokenizerFast"/' "$MODEL_DIR/tokenizer_config.json"
-fi
+# 1b. Parche del tokenizer_config: transformers 5 lo guarda de forma que el
+#     converter de llama.cpp no puede recargarlo (clase "TokenizersBackend" y
+#     extra_special_tokens como lista en vez de dict). Lo normalizamos.
+echo ">> parcheando tokenizer_config.json para el converter"
+python - "$MODEL_DIR/tokenizer_config.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["tokenizer_class"] = "PreTrainedTokenizerFast"
+if isinstance(d.get("extra_special_tokens"), list):
+    d["extra_special_tokens"] = {}
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False)
+print("  ok")
+PY
 
 # 2. HF -> GGUF (f16). El converter lee el tokenizer.json (BPE byte-level) y la
 #    arquitectura Llama de config.json.
