@@ -7,6 +7,7 @@ set -euo pipefail
 
 MODEL_DIR="${1:-models/ndx-coder-small}"
 OUT_DIR="${2:-gguf}"
+NAME="$(basename "$MODEL_DIR")"          # nombra los .gguf según el modelo
 LLAMA_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
 
 mkdir -p "$OUT_DIR"
@@ -47,7 +48,7 @@ PY
 #    arquitectura Llama de config.json.
 echo ">> convirtiendo a GGUF f16"
 python "$LLAMA_DIR/convert_hf_to_gguf.py" "$MODEL_DIR" \
-  --outfile "$OUT_DIR/ndx-coder-f16.gguf" --outtype f16
+  --outfile "$OUT_DIR/$NAME-f16.gguf" --outtype f16
 
 # 3. Cuantizar (necesita el binario llama-quantize; build si no está)
 QUANT="$LLAMA_DIR/build/bin/llama-quantize"
@@ -57,12 +58,12 @@ if [ ! -x "$QUANT" ]; then
   cmake --build "$LLAMA_DIR/build" --target llama-quantize -j
 fi
 
-echo ">> cuantizando Q8_0 y Q4_K_M"
-"$QUANT" "$OUT_DIR/ndx-coder-f16.gguf" "$OUT_DIR/ndx-coder-Q8_0.gguf"   Q8_0
-"$QUANT" "$OUT_DIR/ndx-coder-f16.gguf" "$OUT_DIR/ndx-coder-Q4_K_M.gguf" Q4_K_M
+echo ">> cuantizando Q4_K_M"
+"$QUANT" "$OUT_DIR/$NAME-f16.gguf" "$OUT_DIR/$NAME-Q4_K_M.gguf" Q4_K_M
 
 echo ""
 echo "Listo. Tamaños:"
 ls -lh "$OUT_DIR"/*.gguf | awk '{print "  "$5"\t"$9}'
 echo ""
-echo "Probar en CPU:  llama-cli -m $OUT_DIR/ndx-coder-Q4_K_M.gguf -p '<|user|>\\nModela...\\n<|assistant|>\\n'"
+echo "Q4 listo: $OUT_DIR/$NAME-Q4_K_M.gguf"
+echo "Para liberar disco puedes borrar el f16:  rm $OUT_DIR/$NAME-f16.gguf"
