@@ -19,8 +19,8 @@ data:
 train:
   output_dir: models/ndx-coder-gemma3-270m   # train_tsd le agrega -base / -tsd
   num_train_epochs: 3
-  per_device_train_batch_size: 8
-  gradient_accumulation_steps: 4
+  per_device_train_batch_size: 2      # vocab 256k → logits [B,2048,256k] enormes; batch chico evita OOM
+  gradient_accumulation_steps: 16     # batch efectivo 32
   learning_rate: 2.0e-4          # pretrained → LR más bajo que el from-scratch
   lr_scheduler_type: cosine
   warmup_ratio: 0.03

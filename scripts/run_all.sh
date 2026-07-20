@@ -16,6 +16,7 @@
 # =============================================================================
 set -uo pipefail
 export PYTHONIOENCODING=utf-8    # logs con unicode robustos en cualquier consola
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # menos OOM por fragmentación (vocabs grandes)
 
 MODE="${1:-full}"
 REMOTE="${2:-}"
