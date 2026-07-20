@@ -78,8 +78,7 @@ export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge
   [ -d "$adir" ] || { log "  (no existe $adir, skip)"; return 1; }
   python -m src.merge --config "$cfg" --adapter "$adir" --out "${adir}-merged" --device cpu || return 1
   export_pretrained "${adir}-merged" "$base" "$name"; local rc=$?
-  rm -rf "${adir}-merged"    # el merged es intermedio; el f16 GGUF es el respaldo → libera disco
-  rm -rf ~/.cache/huggingface/hub/models--${base//\//--}   # el base de gemma4 ya no se usa tras el export (~11-16GB)
+  rm -rf "${adir}-merged"    # merged intermedio (regenerable; el f16 GGUF es el respaldo). Bases NO se borran.
   return $rc
 }
 
