@@ -125,6 +125,7 @@ def main() -> None:
         eval_steps=t["eval_steps"],
         save_strategy=t["save_strategy"],
         save_steps=t["save_steps"],
+        save_total_limit=t.get("save_total_limit", 1),   # no acumular checkpoints (disco)
         seed=t["seed"],
         report_to=t.get("report_to", "none"),
     )

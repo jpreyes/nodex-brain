@@ -77,7 +77,9 @@ export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge
   local adir="$1" cfg="$2" base="$3" name="$4"
   [ -d "$adir" ] || { log "  (no existe $adir, skip)"; return 1; }
   python -m src.merge --config "$cfg" --adapter "$adir" --out "${adir}-merged" --device cpu || return 1
-  export_pretrained "${adir}-merged" "$base" "$name"
+  export_pretrained "${adir}-merged" "$base" "$name"; local rc=$?
+  rm -rf "${adir}-merged"    # el merged es intermedio; el f16 GGUF es el respaldo → libera disco
+  return $rc
 }
 
 # =============================================================================
