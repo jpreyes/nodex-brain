@@ -115,13 +115,16 @@ fi
   cp -f "$OUT/ndx-coder-nano-215m-Q4_K_M.gguf" "$CODE/packages/coder/model/" && log "nano → nodex-code/packages/coder/model/"
 
 # --- UPLOAD (rclone: Dropbox o Google Drive) — TODO, incluido el f16 ----------
-if [ -n "$REMOTE" ]; then
+if [ -n "$REMOTE" ] && [ "$MODE" = "full" ]; then
   command -v rclone >/dev/null || curl https://rclone.org/install.sh | bash
-  log "===== upload a $REMOTE (gguf f16+Q4 + modelos HF) ====="
-  run upload-gguf   rclone copy "$OUT" "$REMOTE/gguf" --transfers 4
-  run upload-models rclone copy "$BRAIN/models" "$REMOTE/models" --transfers 4 --exclude "checkpoint-*/**"
+  log "===== upload a $REMOTE (gguf f16+Q4) ====="
+  run upload-gguf rclone copy "$OUT" "$REMOTE/gguf" --transfers 4    # f16+Q4 = 'todo incluido el f16'
+  # los HF models/ son grandes y redundantes con el f16 → opt-in: UPLOAD_MODELS=1 bash run_all.sh full ...
+  [ "${UPLOAD_MODELS:-0}" = "1" ] && run upload-models rclone copy "$BRAIN/models" "$REMOTE/models" --transfers 4 --exclude "checkpoint-*/**"
+elif [ -n "$REMOTE" ]; then
+  log "smoke → NO subo (el upload es solo para el full)"
 else
-  log "sin REMOTE → no subo. (pásalo como 2º arg: 'store:nodex-models')"
+  log "sin REMOTE → no subo."
 fi
 
 # --- resumen -----------------------------------------------------------------
