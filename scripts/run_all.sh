@@ -73,6 +73,12 @@ export_pretrained(){  # $1=model_dir $2=base_id $3=nombre-familia
   python "$LLAMA/convert_hf_to_gguf.py" "$dir" --outfile "$OUT/$name-f16.gguf" --outtype f16 && \
     "$LLAMA/build/bin/llama-quantize" "$OUT/$name-f16.gguf" "$OUT/$name-Q4_K_M.gguf" Q4_K_M
 }
+export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge → gguf)
+  local adir="$1" cfg="$2" base="$3" name="$4"
+  [ -d "$adir" ] || { log "  (no existe $adir, skip)"; return 1; }
+  python -m src.merge --config "$cfg" --adapter "$adir" --out "${adir}-merged" --device cpu || return 1
+  export_pretrained "${adir}-merged" "$base" "$name"
+}
 
 # =============================================================================
 setup
@@ -100,8 +106,8 @@ if [ "$MODE" = "full" ]; then
   run export-gemma3   export_pretrained models/ndx-coder-gemma3-270m  google/gemma-3-270m       ndx-coder-gemma3-270m
   run export-granite  export_pretrained models/ndx-coder-granite-350m ibm-granite/granite-4.0-350m ndx-coder-granite-350m
   run export-qwen3    export_pretrained models/ndx-coder-qwen3-0.6b   Qwen/Qwen3-0.6B-Base      ndx-coder-qwen3-0.6b
-  run export-gemma4e2b export_pretrained models/ndx-coder-gemma4-e2b  google/gemma-4-E2B-it     ndx-coder-gemma4-e2b
-  run export-gemma4e4b export_pretrained models/ndx-coder-gemma4-e4b  google/gemma-4-E4B-it     ndx-coder-gemma4-e4b
+  run export-gemma4e2b export_qlora models/ndx-coder-gemma4-e2b configs/coder_gemma4_e2b.yaml google/gemma-4-E2B-it ndx-coder-gemma4-e2b
+  run export-gemma4e4b export_qlora models/ndx-coder-gemma4-e4b configs/coder_gemma4_e4b.yaml google/gemma-4-E4B-it ndx-coder-gemma4-e4b
 fi
 
 # --- entregar el nano repair-trained a nodex-code (para el A/B de code) -------

@@ -8,6 +8,9 @@ model:
   name_or_path: google/gemma-4-E2B-it
   trust_remote_code: false
 
+quantization:
+  load_in_4bit: true       # QLoRA — full-FT no cabe en 32GB (salida = adapter → merge en el export)
+
 data:
   train: ../nodex-code/datasets/generator-combined-cot-sft-40185/train.jsonl
   val:   ../nodex-code/datasets/generator-combined-cot-sft-40185/val.jsonl

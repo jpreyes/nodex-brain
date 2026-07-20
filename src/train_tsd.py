@@ -80,11 +80,27 @@ def main() -> None:
         tok = AutoTokenizer.from_pretrained(m["name_or_path"], trust_remote_code=m.get("trust_remote_code", False))
         if tok.pad_token_id is None:
             tok.pad_token = tok.eos_token
-        model = AutoModelForCausalLM.from_pretrained(
-            m["name_or_path"], dtype=torch.bfloat16,
-            attn_implementation="eager",                      # 4D additive mask requiere eager
-            trust_remote_code=m.get("trust_remote_code", False),
-        )
+        q = cfg.get("quantization") or m.get("quantization") or {}
+        if q.get("load_in_4bit"):
+            # QLoRA: modelos grandes (gemma4 e2b/e4b) no caben en full-FT → 4-bit + LoRA.
+            from transformers import BitsAndBytesConfig
+            from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+            bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                                     bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True)
+            model = AutoModelForCausalLM.from_pretrained(
+                m["name_or_path"], quantization_config=bnb, device_map={"": 0},
+                attn_implementation="eager", trust_remote_code=m.get("trust_remote_code", False))
+            model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+            model = get_peft_model(model, LoraConfig(
+                r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
+                task_type="CAUSAL_LM", target_modules="all-linear"))
+            print(f"[{tag}] QLoRA 4-bit + LoRA (salida = adapter, requiere merge para GGUF)")
+        else:
+            model = AutoModelForCausalLM.from_pretrained(
+                m["name_or_path"], dtype=torch.bfloat16,
+                attn_implementation="eager",                  # 4D additive mask requiere eager
+                trust_remote_code=m.get("trust_remote_code", False),
+            )
     else:
         tok = build_tokenizer(cfg["tokenizer"])
         m["attn_implementation"] = "eager"
