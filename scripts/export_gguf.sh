@@ -16,7 +16,10 @@ if [ ! -d "$LLAMA_DIR" ]; then
   echo ">> clonando llama.cpp en $LLAMA_DIR"
   git clone https://github.com/ggml-org/llama.cpp "$LLAMA_DIR"
 fi
-pip install -q -r "$LLAMA_DIR/requirements.txt"
+# OJO: NO instalar el requirements.txt completo de llama.cpp — reinstala torch
+# (a veces la build CPU) y rompe el entorno de entrenamiento. Solo lo mínimo que
+# el converter necesita (torch/transformers ya están instalados).
+pip install -q gguf numpy sentencepiece protobuf
 
 # 1a. Parche del converter: nuestro tokenizer es BPE byte-level (estilo GPT-2),
 #     pero su hash no está en la lista de llama.cpp → en vez de abortar, cae a
