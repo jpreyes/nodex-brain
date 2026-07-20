@@ -79,6 +79,7 @@ export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge
   python -m src.merge --config "$cfg" --adapter "$adir" --out "${adir}-merged" --device cpu || return 1
   export_pretrained "${adir}-merged" "$base" "$name"; local rc=$?
   rm -rf "${adir}-merged"    # el merged es intermedio; el f16 GGUF es el respaldo → libera disco
+  rm -rf ~/.cache/huggingface/hub/models--${base//\//--}   # el base de gemma4 ya no se usa tras el export (~11-16GB)
   return $rc
 }
 
