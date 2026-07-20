@@ -9,7 +9,10 @@ Uso (en la GPU rentada):
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 from datasets import concatenate_datasets, load_dataset
 from transformers import LlamaConfig, LlamaForCausalLM, PreTrainedTokenizerFast
@@ -126,6 +129,7 @@ def main() -> None:
         save_strategy=t["save_strategy"],
         save_steps=t["save_steps"],
         save_total_limit=t.get("save_total_limit", 1),   # no acumular checkpoints (disco)
+        dataset_num_proc=max(1, min(16, (os.cpu_count() or 4) - 1)),   # tokeniza en paralelo (más rápido)
         seed=t["seed"],
         report_to=t.get("report_to", "none"),
     )

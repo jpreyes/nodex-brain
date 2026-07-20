@@ -17,6 +17,9 @@ conservar el mecanismo sólo si mueve la métrica).
 from __future__ import annotations
 
 import argparse
+import os
+
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")  # evita deadlock con num_proc
 
 import torch
 from datasets import concatenate_datasets, load_dataset
@@ -124,7 +127,8 @@ def main() -> None:
         ds["train"] = concatenate_datasets([only(ds["train"]), only(rep)]).shuffle(seed=cfg["train"]["seed"])
         print(f"mezcla: gen {gen_n} + repair {len(rep)} = {len(ds['train'])}")
     pp = make_preprocess(tok, max_len)
-    ds = ds.map(pp, remove_columns=ds["train"].column_names, desc="tokenize+TSD-paths")
+    nproc = max(1, min(16, (os.cpu_count() or 4) - 1))       # paraleliza el preprocesado (era 1 proceso → lento)
+    ds = ds.map(pp, remove_columns=ds["train"].column_names, num_proc=nproc, desc="tokenize+TSD-paths")
 
     t = cfg["train"]
     out = t["output_dir"] + ("-tsd" if args.tsd else "-base")
