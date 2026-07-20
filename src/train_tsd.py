@@ -23,7 +23,7 @@ from datasets import concatenate_datasets, load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
 from .config import load_config
-from .train_scratch import build_model, build_tokenizer
+from .train_scratch import CHAT_TEMPLATE, build_model, build_tokenizer
 from .tsd.collator import TSDCollator
 from .tsd.ultrametric import FALLBACK_DEPTH, deck_char_paths, token_paths
 
@@ -81,6 +81,8 @@ def main() -> None:
         tok = AutoTokenizer.from_pretrained(m["name_or_path"], trust_remote_code=m.get("trust_remote_code", False))
         if tok.pad_token_id is None:
             tok.pad_token = tok.eos_token
+        if tok.chat_template is None:                # los bases (gemma3-270m, etc.) no traen template
+            tok.chat_template = CHAT_TEMPLATE         # formato uniforme de la familia (<|user|>/<|assistant|>)
         q = cfg.get("quantization") or m.get("quantization") or {}
         if q.get("load_in_4bit"):
             # QLoRA: modelos grandes (gemma4 e2b/e4b) no caben en full-FT → 4-bit + LoRA.
