@@ -86,7 +86,6 @@ log "===== MODO: $MODE ====="
 # Este script NO corre experimentos: viven en src/experiments/ y se lanzan aparte
 # (ver EXPERIMENTS.md). Producción no debe depender de que un experimento termine.
 run prod-nano          python -m src.train_sft --config configs/coder_nano.yaml          $SMOKE_ARGS
-run prod-granite-350m  python -m src.train_sft --config configs/coder_granite_350m.yaml  $SMOKE_ARGS
 run prod-qwen3-0.6b    python -m src.train_sft --config configs/coder_qwen3_06b.yaml     $SMOKE_ARGS
 run prod-gemma4-e2b    python -m src.train_sft --config configs/coder_gemma4_e2b.yaml    $SMOKE_ARGS
 run prod-gemma4-e4b    python -m src.train_sft --config configs/coder_gemma4_e4b.yaml    $SMOKE_ARGS
@@ -96,7 +95,6 @@ run prod-gemma4-e4b    python -m src.train_sft --config configs/coder_gemma4_e4b
 log "===== export GGUF ====="
 run export-nano export_nano
 if [ "$MODE" = "full" ]; then
-  run export-granite  export_pretrained models/ndx-coder-granite-350m ibm-granite/granite-4.0-350m ndx-coder-granite-350m
   run export-qwen3    export_pretrained models/ndx-coder-qwen3-0.6b   Qwen/Qwen3-0.6B-Base      ndx-coder-qwen3-0.6b
   run export-gemma4e2b export_qlora models/ndx-coder-gemma4-e2b configs/coder_gemma4_e2b.yaml google/gemma-4-E2B-it ndx-coder-gemma4-e2b
   run export-gemma4e4b export_qlora models/ndx-coder-gemma4-e4b configs/coder_gemma4_e4b.yaml google/gemma-4-E4B-it ndx-coder-gemma4-e4b

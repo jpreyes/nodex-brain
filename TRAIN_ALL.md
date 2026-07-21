@@ -1,7 +1,9 @@
-# Plan de entrenamiento — familia ndx-coder + ablación TSD
+# Plan de entrenamiento — familia ndx-coder (producción)
 
 Comandos para la caja GPU (NVIDIA). Local (Intel Arc) NO entrena; solo smoke.
-Dos tracks: (A) **ablación TSD** (pura, sin repair) y (B) **familia de producción** (con repair-sft).
+**Solo producción.** Los experimentos viven en `src/experiments/` y en `EXPERIMENTS.md`.
+
+Familia: `nano-215m` · `qwen3-0.6b` · `gemma4-e2b` · `gemma4-e4b`.
 
 ## 0. Setup de la caja  (completo)
 ```bash
@@ -28,7 +30,7 @@ rclone copy "$DB/nodex-code/datasets/generator-combined-cot-sft-40185" /workspac
 rclone copy "$DB/nodex-code/datasets/repair-sft"                        /workspace/nodex-code/datasets/repair-sft -P
 rclone copy "$DB/nodex-brain/tokenizer/ndx"                             /workspace/nodex-brain/tokenizer/ndx -P
 
-# 0e. HF: ya NO se entrena gemma-3-270m, que era el ÚNICO gated de la familia. Granite,
+# 0e. HF: ya NO se entrenan gemma-3-270m (era el ÚNICO gated) ni granite-350m.
 #     Qwen3 y Gemma 4 (E2B/E4B) son Apache-2.0 UNGATED → bajan sin login y se pueden
 #     redistribuir (verificado en HF el 2026-07-20; Google cambió la licencia entre
 #     Gemma 3 y Gemma 4). Loguear igual por los rate limits:
@@ -44,7 +46,6 @@ assistant) y mezcla el canal de reparación desde el config.
 
 ```bash
 python -m src.train_sft --config configs/coder_nano.yaml          # nano from-scratch
-python -m src.train_sft --config configs/coder_granite_350m.yaml
 python -m src.train_sft --config configs/coder_qwen3_06b.yaml
 python -m src.train_sft --config configs/coder_gemma4_e2b.yaml    # QLoRA por el config
 python -m src.train_sft --config configs/coder_gemma4_e4b.yaml    # el más grande
@@ -70,7 +71,7 @@ Cada `models/<dir>` fine-tuneado (full-FT → ya es modelo completo, sin adapter
 python ../llama.cpp/convert_hf_to_gguf.py models/<dir> --outfile gguf/<name>-f16.gguf --outtype f16
 ./llama-quantize gguf/<name>-f16.gguf gguf/ndx-coder-<familia>-Q4_K_M.gguf Q4_K_M
 ```
-Familias/nombres finales: `ndx-coder-nano-215m`, `-granite-350m`, `-qwen3-0.6b`, `-gemma4-e2b`, `-gemma4-e4b`.
+Familias/nombres finales: `ndx-coder-nano-215m`, `-qwen3-0.6b`, `-gemma4-e2b`, `-gemma4-e4b`.
 (El nano usa su tokenizer propio → export como el original; los pretrained traen su tokenizer HF.)
 
 ## C. Entregar a nodex-code + medir adecuación
