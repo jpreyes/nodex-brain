@@ -206,6 +206,12 @@ def add_common_args(ap):
     ap.add_argument("--batch", type=int, default=None)
     ap.add_argument("--seq", type=int, default=None)
     ap.add_argument("--repair-train", default=None, help="jsonl repair-sft a MEZCLAR")
+    # Compartida a propósito: `build_datasets` ya la respeta, la usa el smoke de producción
+    # (run_all.sh mezcla 54k de repair aunque --subset recorte la generación) y es
+    # obligatoria en la ablación TSD, que corre pura. Vivía solo en el entrenador de
+    # experimento y por eso `run_all.sh smoke` reventaba en los cuatro modelos.
+    ap.add_argument("--no-repair", action="store_true",
+                    help="no mezclar el canal de reparación (smoke, y ablación TSD pura)")
     return ap
 
 

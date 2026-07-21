@@ -70,8 +70,7 @@ def main() -> None:
     ap.add_argument("--no-norm", action="store_true",
                     help="NO normalizar D por K (reproduce las corridas históricas; "
                          "rompe la comparabilidad de λ entre árboles de distinta profundidad)")
-    ap.add_argument("--no-repair", action="store_true",
-                    help="ablación PURA: no mezcla repair (recomendado para el 2x2)")
+    # --no-repair viene de add_common_args (train_sft): la ablación 2x2 debe correr PURA.
     args = ap.parse_args()
 
     cfg = load_config(args.config)
