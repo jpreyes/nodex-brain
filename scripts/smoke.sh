@@ -69,7 +69,7 @@ fi
 
 # --- 4. simetría train/infer --------------------------------------------------
 hr "[4] tsd_config.json — el puente train/infer"
-CFG=models/exp-nano-215m-tsd-ast/tsd_config.json
+CFG=models/exp-nano-215m-tsd-ast-s42/tsd_config.json
 if [ -f "$CFG" ]; then
   cat "$CFG" | sed 's/^/     /'
   python - "$CFG" <<'PY' && ok "config coherente con lo entrenado" || bad "tsd_config.json incoherente"

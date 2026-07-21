@@ -4,11 +4,20 @@ Entrena el MISMO modelo con y sin bias. `--tsd` cambia solo el bias; datos, seed
 hiperparámetros quedan idénticos → ablación limpia. Juzgar por ADECUACIÓN vs baseline
 (TSD-CONTRACT: conservar el mecanismo solo si mueve la métrica).
 
+Usa los configs exp_*.yaml, que apuntan al SPLIT CONGELADO. Los coder_*.yaml son de
+producción y cargan el corpus completo, que contiene Test A y Test B: entrenar el 2x2 con
+ellos invalidaría los dos tests sin que nada lo avisara.
+
     E=src.experiments.train_tsd; A="--ablation --no-repair"
-    python -m $E --config configs/coder_nano.yaml      $A                  # nano  base
-    python -m $E --config configs/coder_nano.yaml      $A --tsd --tree ast # nano  +TSD
-    python -m $E --config configs/coder_qwen3_06b.yaml $A                  # qwen3 base
-    python -m $E --config configs/coder_qwen3_06b.yaml $A --tsd --tree ast # qwen3 +TSD
+    for s in 42 1337 7; do
+      python -m $E --config configs/exp_nano.yaml      $A --seed $s
+      python -m $E --config configs/exp_nano.yaml      $A --seed $s --tsd --tree ast
+      python -m $E --config configs/exp_qwen3_06b.yaml $A --seed $s
+      python -m $E --config configs/exp_qwen3_06b.yaml $A --seed $s --tsd --tree ast
+    done
+
+El árbol y la semilla van en el nombre de la carpeta (`-base-s42`, `-tsd-ast-s1337`), así
+que las 12 corridas no se pisan.
 
 Este archivo NO es la ruta de producción: reutiliza `src/train_sft.py` (modelo, datos,
 preprocesado, TrainingArguments) y solo añade tres cosas:
@@ -96,9 +105,11 @@ def main() -> None:
             f"idéntico a cero y esta corrida NO sería el brazo TSD. Revisa el hook "
             f"`extra` de make_preprocess y remove_unused_columns.")
 
-    # El árbol va en el nombre: -tsd-fallback y -tsd-ast son experimentos DISTINTOS y no
-    # deben pisarse. El baseline es común a ambos (bias 0 no depende del árbol).
-    suffix = ("-tsd-" + args.tree) if args.tsd else "-base"
+    # El árbol Y la semilla van en el nombre: -tsd-fallback y -tsd-ast son experimentos
+    # distintos, y las 3 réplicas de cada celda son corridas distintas. Ninguna debe pisar
+    # a otra — sin el sufijo de semilla, las 12 corridas del 2x2 dejarían 4 carpetas.
+    seed = args.seed or cfg["train"]["seed"]
+    suffix = (("-tsd-" + args.tree) if args.tsd else "-base") + f"-s{seed}"
     out = cfg["train"]["output_dir"] + (suffix if args.ablation else "")
 
     _, K_tree = get_tree(args.tree)
@@ -120,7 +131,7 @@ def main() -> None:
     # separaran sin que nadie lo notara (el brazo TSD se habría evaluado con otro bias
     # del que entrenó). Con un solo origen, la asimetría deja de ser posible.
     save_tsd_config(out, use_tsd=args.tsd, tree=args.tree, K=K_tree, lam=args.lam,
-                    kernel=args.kernel, norm=not args.no_norm)
+                    kernel=args.kernel, norm=not args.no_norm, seed=seed)
     print(f"[{tag}] guardado en {out}")
 
 

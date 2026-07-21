@@ -162,7 +162,7 @@ def build_datasets(cfg, args, tok, max_len, extra=None):
         rep = load_dataset("json", data_files={"train": repair_path})["train"]
         gen_n = len(ds["train"])
         ds["train"] = concatenate_datasets([only(ds["train"]), only(rep)]).shuffle(
-            seed=cfg["train"]["seed"])
+            seed=(getattr(args, "seed", None) or cfg["train"]["seed"]))
         print(f"mezcla: gen {gen_n} + repair {len(rep)} = {len(ds['train'])}")
     pp = make_preprocess(tok, max_len, extra=extra)
     nproc = max(1, min(16, (os.cpu_count() or 4) - 1))   # preprocesado en paralelo
@@ -191,7 +191,7 @@ def build_training_args(cfg, args, out, tag, keep_cols=False):
         save_strategy=t["save_strategy"],
         save_steps=t["save_steps"],
         save_total_limit=t.get("save_total_limit", 1),    # no acumular checkpoints (disco)
-        seed=t["seed"],
+        seed=(getattr(args, "seed", None) or t["seed"]),
         report_to=t.get("report_to", "none"),
         # keep_cols: el experimento necesita que paths/in_deck lleguen al collator.
         remove_unused_columns=not keep_cols,
@@ -212,6 +212,11 @@ def add_common_args(ap):
     # experimento y por eso `run_all.sh smoke` reventaba en los cuatro modelos.
     ap.add_argument("--no-repair", action="store_true",
                     help="no mezclar el canal de reparación (smoke, y ablación TSD pura)")
+    # El 2x2 corre 3 semillas por celda: sin esto habría que editar el YAML por corrida, y
+    # las tres escribirían en el MISMO output_dir y se pisarían (el mismo fallo que tenía
+    # --ablation). En el experimento el seed va además en el nombre de la carpeta.
+    ap.add_argument("--seed", type=int, default=None,
+                    help="sobrescribe train.seed del config (para las réplicas del 2x2)")
     return ap
 
 
