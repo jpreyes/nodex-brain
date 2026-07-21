@@ -28,6 +28,7 @@ from ..config import load_config
 from ..train_sft import (add_common_args, build_datasets, build_training_args,
                          load_model_and_tokenizer, CoT_END)
 from ..tsd.collator import TSDCollator
+from ..tsd.infer import save_tsd_config
 from ..tsd.ultrametric import get_tree, token_paths
 
 from transformers import Trainer
@@ -114,6 +115,13 @@ def main() -> None:
     trainer.train()
     trainer.save_model(out)
     tok.save_pretrained(out)
+
+    # Los parámetros del bias se GUARDAN con el modelo, y la inferencia los lee de aquí.
+    # Declararlos por CLI en dos sitios fue justo lo que hizo que train e infer se
+    # separaran sin que nadie lo notara (el brazo TSD se habría evaluado con otro bias
+    # del que entrenó). Con un solo origen, la asimetría deja de ser posible.
+    save_tsd_config(out, use_tsd=args.tsd, tree=args.tree, K=K_tree, lam=args.lam,
+                    kernel=args.kernel, norm=not args.no_norm)
     print(f"[{tag}] guardado en {out}")
 
 
