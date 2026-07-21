@@ -35,7 +35,17 @@ correr(){
     log "· $tag ya está — salto"; SALTADAS=$((SALTADAS+1)); return 0
   fi
   log "▶ $tag"
-  if python -m "$E" --config "$cfg" $A "$@" > "$LOG/$tag.log" 2>&1; then
+  python -m "$E" --config "$cfg" $A "$@" > "$LOG/$tag.log" 2>&1
+  local rc=$?
+  # El VEREDICTO son los artefactos, no el exit code. Medido: qwen3 completaba el
+  # entrenamiento, guardaba el modelo y el tsd_config, imprimía su última línea... y salía
+  # con código != 0 al apagar el intérprete (teardown del dataloader / CUDA). Fiarse solo
+  # del código marcaba como fallidas 6 corridas de 1h30 que estaban perfectas.
+  if [ -f "$out/model.safetensors" ] && [ -f "$out/tsd_config.json" ]; then
+    [ $rc -ne 0 ] && log "  ! $tag — exit $rc pero los artefactos están completos: se da por buena"
+    rc=0
+  fi
+  if [ $rc -eq 0 ]; then
     local frac
     frac=$(grep -oE "frac in_deck=[0-9.]+" "$LOG/$tag.log" | head -1 | cut -d= -f2)
     # 0 aborta solo; ~0.87 significa que el corte del CoT se rompió y la corrida NO vale
