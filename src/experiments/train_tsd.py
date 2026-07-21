@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 
+import numpy as np
+
 from ..config import load_config
 from ..train_sft import (add_common_args, build_datasets, build_training_args,
                          load_model_and_tokenizer, CoT_END)
@@ -78,6 +80,21 @@ def main() -> None:
     # eager: la máscara aditiva 4D del collator lo exige (SDPA la descartaría sin avisar).
     tok, model = load_model_and_tokenizer(cfg, tag=tag, attn="eager")
     ds = build_datasets(cfg, args, tok, max_len, extra=make_tsd_extra(args.tree))
+
+    # GUARDA CONTRA EL FALLO SILENCIOSO: si los paths no llegan al collator
+    # (remove_unused_columns mal puesto, el hook `extra` sin efecto, el árbol
+    # degenerado...) el bias es 0 y la corrida entrena un baseline disfrazado de
+    # brazo TSD — sin error, con logs normales, y solo se descubre al comparar
+    # pesos horas después. Se paga aquí, en segundos.
+    frac = float(np.mean([np.mean(f["in_deck"]) for f in ds["train"].select(range(min(256, len(ds["train"]))))]))
+    print(f"[{tag}] árbol={args.tree}  frac in_deck={frac:.3f}  "
+          f"(esperado ~0.50 con el corte del CoT; 0.87 significaría que el bias "
+          f"vuelve a cubrir el scratchpad)")
+    if args.tsd and frac == 0.0:
+        raise SystemExit(
+            f"[{tag}] ABORTADO: in_deck=0 en toda la muestra → el bias TSD sería "
+            f"idéntico a cero y esta corrida NO sería el brazo TSD. Revisa el hook "
+            f"`extra` de make_preprocess y remove_unused_columns.")
 
     # El árbol va en el nombre: -tsd-fallback y -tsd-ast son experimentos DISTINTOS y no
     # deben pisarse. El baseline es común a ambos (bias 0 no depende del árbol).
