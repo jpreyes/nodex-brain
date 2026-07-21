@@ -20,8 +20,8 @@ data:
 train:
   output_dir: models/ndx-coder-gemma4-e2b
   num_train_epochs: 2
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 8
+  per_device_train_batch_size: 1      # vocab 262k → logits enormes; batch 1 aun con QLoRA
+  gradient_accumulation_steps: 32
   learning_rate: 1.0e-4
   lr_scheduler_type: cosine
   warmup_ratio: 0.03

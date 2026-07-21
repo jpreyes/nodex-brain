@@ -98,10 +98,10 @@ run prod-gemma4-e2b    python -m src.train_tsd     --config configs/coder_gemma4
 run prod-gemma4-e4b    python -m src.train_tsd     --config configs/coder_gemma4_e4b.yaml    $SMOKE_ARGS
 
 # --- TRACK A: ablación TSD 2x2 (pura, sin repair) ----------------------------
-run tsd-nano-base      python -m src.train_tsd --config configs/coder_nano.yaml        --no-repair       $SMOKE_ARGS
-run tsd-nano-tsd       python -m src.train_tsd --config configs/coder_nano.yaml        --no-repair --tsd $SMOKE_ARGS
-run tsd-gemma3-base    python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --no-repair       $SMOKE_ARGS
-run tsd-gemma3-tsd     python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --no-repair --tsd $SMOKE_ARGS
+run tsd-nano-base      python -m src.train_tsd --config configs/coder_nano.yaml        --ablation --no-repair       $SMOKE_ARGS
+run tsd-nano-tsd       python -m src.train_tsd --config configs/coder_nano.yaml        --ablation --no-repair --tsd $SMOKE_ARGS
+run tsd-gemma3-base    python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --ablation --no-repair       $SMOKE_ARGS
+run tsd-gemma3-tsd     python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --ablation --no-repair --tsd $SMOKE_ARGS
 
 # --- EXPORT GGUF -------------------------------------------------------------
 # En smoke exportamos SOLO el nano (valida el path completo sin gastar en 6 exports).

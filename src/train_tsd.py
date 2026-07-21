@@ -64,6 +64,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Ablación TSD (con/sin bias ultramétrico)")
     ap.add_argument("--config", required=True)
     ap.add_argument("--tsd", action="store_true", help="activa el bias de atención TSD")
+    ap.add_argument("--ablation", action="store_true", help="sufija el output con -base/-tsd (para el 2x2); producción NO lo usa")
     ap.add_argument("--lam", type=float, default=1.0, help="fuerza del bias TSD (λ)")
     ap.add_argument("--kernel", default="linear", choices=["linear", "padic"])
     ap.add_argument("--subset", type=int, default=None)
@@ -131,7 +132,8 @@ def main() -> None:
     ds = ds.map(pp, remove_columns=ds["train"].column_names, num_proc=nproc, desc="tokenize+TSD-paths")
 
     t = cfg["train"]
-    out = t["output_dir"] + ("-tsd" if args.tsd else "-base")
+    # producción: guarda en output_dir tal cual (lo que el export busca). Ablación 2x2: sufija -base/-tsd.
+    out = t["output_dir"] + (("-tsd" if args.tsd else "-base") if args.ablation else "")
     targs = TrainingArguments(
         output_dir=out,
         run_name=(cfg.get("run_name", "coder") + "-" + tag),
