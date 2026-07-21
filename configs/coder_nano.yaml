@@ -15,7 +15,9 @@ model:
   max_position_embeddings: 2048
   rms_norm_eps: 1.0e-5
   rope_theta: 10000
-  attn_implementation: eager        # el bias 4D de TSD requiere eager
+  # attn_implementation lo decide el entrenador, no el config: producción (train_sft) usa
+  # el default SDPA; el experimento (experiments/train_tsd) fuerza eager, que su máscara
+  # aditiva 4D requiere. Fijarlo aquí obligaría a producción a pagar eager sin recibir bias.
 
 data:
   train: ../nodex-code/datasets/generator-combined-cot-sft-40185/train.jsonl

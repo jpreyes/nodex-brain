@@ -51,50 +51,20 @@ setup(){
   fi
 }
 
-# --- tokenizer fix para pretrained (quirk de transformers 5 al re-guardar) ----
-# transformers 5 guarda tokenizer_class="TokenizersBackend" y a veces pierde vocab/merges
-# → el converter no lo reconoce. Restauramos el tokenizer PRISTINO del cache de HF.
-fix_hf_tokenizer(){  # $1=model_dir  $2=base_id (org/name)
-  local dir="$1" base="$2"
-  local snap; snap=$(ls -d ~/.cache/huggingface/hub/models--${base//\//--}/snapshots/*/ 2>/dev/null | head -1)
-  [ -n "$snap" ] || { log "  (sin cache de $base para fix de tokenizer; intento directo)"; return 0; }
-  for t in tokenizer.json tokenizer_config.json special_tokens_map.json added_tokens.json vocab.json merges.txt tokenizer.model; do
-    [ -f "$snap/$t" ] && cp -f "$snap/$t" "$dir/$t"
-  done
-}
-
-# --- config fix: transformers 5 DROPS campos al re-guardar ---------------------
-# Caso granite-4.0-350m: se pierde `layer_types` (28 x "attention") → el converter
-# asume TODAS las capas recurrentes (head_count_kv=[0]*28) y emite arch granitehybrid
-# sin tensores ssm → llama.cpp: "missing tensor blk.0.ssm_in.weight".
-# El fine-tune NO cambia la arquitectura → restauramos las claves que falten del base.
-fix_hf_config(){  # $1=model_dir  $2=base_id
-  local dir="$1" base="$2"
-  local snap; snap=$(ls -d ~/.cache/huggingface/hub/models--${base//\//--}/snapshots/*/ 2>/dev/null | head -1)
-  [ -n "$snap" ] && [ -f "$snap/config.json" ] || return 0
-  python - "$dir/config.json" "$snap/config.json" <<'PY'
-import json, sys
-out, ref = sys.argv[1], sys.argv[2]
-a = json.load(open(out, encoding="utf-8")); b = json.load(open(ref, encoding="utf-8"))
-missing = [k for k in b if k not in a]
-for k in missing: a[k] = b[k]
-if missing:
-    json.dump(a, open(out, "w", encoding="utf-8"), indent=2)
-    print("config restaurado:", missing)
-PY
-}
-
 # --- export HF dir → gguf f16 + Q4 --------------------------------------------
 export_nano(){   # tokenizer custom → usa el script con parches (ya nombra ndx-coder-nano-215m-*)
   bash scripts/export_gguf.sh models/ndx-coder-nano-215m "$OUT"
 }
+# Delegamos en export_one.sh en vez de duplicar los parches acá: una sola
+# implementación de la reparación (scripts/fix_hf_export.py) y de la validación del
+# gguf. La versión anterior tenía sus propios fix_hf_tokenizer/fix_hf_config que
+# adivinaban la ruta del cache de HF con un glob y, si no la encontraban, retornaban
+# EN SILENCIO — así granite salió dos veces con head_count_kv=[0]*28 y 0 tensores ssm
+# (no carga) sin que el log dijera nada.
 export_pretrained(){  # $1=model_dir $2=base_id $3=nombre-familia
   local dir="$1" base="$2" name="$3"
   [ -d "$dir" ] || { log "  (no existe $dir, skip export)"; return 1; }
-  fix_hf_tokenizer "$dir" "$base"
-  fix_hf_config    "$dir" "$base"
-  python "$LLAMA/convert_hf_to_gguf.py" "$dir" --outfile "$OUT/$name-f16.gguf" --outtype f16 && \
-    "$LLAMA/build/bin/llama-quantize" "$OUT/$name-f16.gguf" "$OUT/$name-Q4_K_M.gguf" Q4_K_M
+  BRAIN="$BRAIN" LLAMA="$LLAMA" OUT="$OUT" bash scripts/export_one.sh "$dir" "$base" "$name"
 }
 export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge → gguf)
   local adir="$1" cfg="$2" base="$3" name="$4"
@@ -109,29 +79,23 @@ export_qlora(){  # $1=adapter_dir $2=config $3=base_id $4=name  (QLoRA → merge
 setup
 log "===== MODO: $MODE ====="
 
-# --- TRACK B: familia de PRODUCCIÓN (con repair mixing) — nano PRIMERO --------
-# nano via train_tsd: enmascara el prompt (loss SOLO en el assistant). NO train_scratch:
+# --- PRODUCCIÓN: familia ndx-coder (con repair mixing) — nano PRIMERO ---------
+# Todo via src.train_sft: enmascara el prompt (loss SOLO en el assistant). NO train_scratch:
 # TRL entrena la secuencia completa + packing → con repair mezclado el modelo aprende a
 # emitir el texto de USUARIO ("El compilador rechazó el deck…") en vez del deck.
-run prod-nano          python -m src.train_tsd     --config configs/coder_nano.yaml          $SMOKE_ARGS
-run prod-gemma3-270m   python -m src.train_tsd     --config configs/coder_gemma3_270m.yaml   $SMOKE_ARGS
-run prod-granite-350m  python -m src.train_tsd     --config configs/coder_granite_350m.yaml  $SMOKE_ARGS
-run prod-qwen3-0.6b    python -m src.train_tsd     --config configs/coder_qwen3_06b.yaml     $SMOKE_ARGS
-run prod-gemma4-e2b    python -m src.train_tsd     --config configs/coder_gemma4_e2b.yaml    $SMOKE_ARGS
-run prod-gemma4-e4b    python -m src.train_tsd     --config configs/coder_gemma4_e4b.yaml    $SMOKE_ARGS
-
-# --- TRACK A: ablación TSD 2x2 (pura, sin repair) ----------------------------
-run tsd-nano-base      python -m src.train_tsd --config configs/coder_nano.yaml        --ablation --no-repair       $SMOKE_ARGS
-run tsd-nano-tsd       python -m src.train_tsd --config configs/coder_nano.yaml        --ablation --no-repair --tsd $SMOKE_ARGS
-run tsd-gemma3-base    python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --ablation --no-repair       $SMOKE_ARGS
-run tsd-gemma3-tsd     python -m src.train_tsd --config configs/coder_gemma3_270m.yaml --ablation --no-repair --tsd $SMOKE_ARGS
+# Este script NO corre experimentos: viven en src/experiments/ y se lanzan aparte
+# (ver EXPERIMENTS.md). Producción no debe depender de que un experimento termine.
+run prod-nano          python -m src.train_sft --config configs/coder_nano.yaml          $SMOKE_ARGS
+run prod-granite-350m  python -m src.train_sft --config configs/coder_granite_350m.yaml  $SMOKE_ARGS
+run prod-qwen3-0.6b    python -m src.train_sft --config configs/coder_qwen3_06b.yaml     $SMOKE_ARGS
+run prod-gemma4-e2b    python -m src.train_sft --config configs/coder_gemma4_e2b.yaml    $SMOKE_ARGS
+run prod-gemma4-e4b    python -m src.train_sft --config configs/coder_gemma4_e4b.yaml    $SMOKE_ARGS
 
 # --- EXPORT GGUF -------------------------------------------------------------
 # En smoke exportamos SOLO el nano (valida el path completo sin gastar en 6 exports).
 log "===== export GGUF ====="
 run export-nano export_nano
 if [ "$MODE" = "full" ]; then
-  run export-gemma3   export_pretrained models/ndx-coder-gemma3-270m  google/gemma-3-270m       ndx-coder-gemma3-270m
   run export-granite  export_pretrained models/ndx-coder-granite-350m ibm-granite/granite-4.0-350m ndx-coder-granite-350m
   run export-qwen3    export_pretrained models/ndx-coder-qwen3-0.6b   Qwen/Qwen3-0.6B-Base      ndx-coder-qwen3-0.6b
   run export-gemma4e2b export_qlora models/ndx-coder-gemma4-e2b configs/coder_gemma4_e2b.yaml google/gemma-4-E2B-it ndx-coder-gemma4-e2b
