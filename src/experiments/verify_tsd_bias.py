@@ -196,7 +196,7 @@ def main():
     ap.add_argument("--n", type=int, default=64, help="ejemplos a analizar")
     ap.add_argument("--lam", type=float, default=1.0)
     ap.add_argument("--kernel", default="linear", choices=["linear", "padic"])
-    ap.add_argument("--tree", default="fallback", choices=["fallback", "ast"],
+    ap.add_argument("--tree", default="fallback", choices=["fallback", "ast", "ast-fam"],
                     help="DEJAR EN fallback para diagnosticar lo ya corrido; 'ast' es SEAM 2")
     ap.add_argument("--skip-weights", action="store_true")
     args = ap.parse_args()

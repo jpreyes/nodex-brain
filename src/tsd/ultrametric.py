@@ -41,7 +41,8 @@ FALLBACK_DEPTH = 2
 # Lo que esto compra sobre el fallback: los niveles 0-1 son TIPADOS y NO-LOCALES. Dos
 # `beam` separados por 300 tokens quedan ultramétricamente cerca. El fallback solo sabe
 # de proximidad posicional, que es lo que RoPE ya provee. Si el método aporta, aporta ahí.
-AST_DEPTH = 4
+AST_DEPTH = 3          # [kind, instancia, slot] — el árbol por defecto
+AST_DEPTH_FAM = 4      # [familia, kind, instancia, slot] — solo para la sub-ablación
 
 # El kind es el primer token de la línea — misma regla que parseLine(), así que no hace
 # falta invocar node para los niveles 0-2. Las 60 keys de STATEMENT_GRAMMAR agrupadas.
@@ -86,15 +87,30 @@ def _kind_of(line: str) -> str | None:
     return tok if tok else None
 
 
-def ast_char_paths(deck: str) -> tuple[np.ndarray, int]:
-    """SEAM 2 REAL — path [familia, kind, instancia, slot] por carácter del deck.
+def ast_char_paths(deck: str, with_family: bool = False) -> tuple[np.ndarray, int]:
+    """SEAM 2 REAL — path [(familia,) kind, instancia, slot] por carácter del deck.
 
-    Devuelve (paths [len(deck), AST_DEPTH], AST_DEPTH). Líneas en blanco → -1 (sin bias).
-    Reemplaza a deck_char_paths(); esta última se conserva como fallback para la
-    comparación honesta fallback-vs-AST.
+    with_family=False (DEFAULT, K=3) → [kind, instancia, slot]. Es el árbol que se usa,
+    porque el nivel de familia no se puede defender y además no aporta. MEDIDO sobre 400
+    decks reales, comparando D normalizada con y sin ese nivel:
+
+        |D(K=4) - D(K=3)| pares solo de CABEZA : 0.0378
+        |D(K=4) - D(K=3)| pares que tocan COLA : 0.0033   <- un orden de magnitud menos
+
+    O sea el nivel familia mueve la métrica un 3.5% global, y donde vive la hipótesis de 2A
+    —la cola— un 0.3%: ruido. Su efecto se concentra en la cabeza porque model/material/
+    section son de los kinds más frecuentes. Cambiar la taxonomía (¿`spring` es conexión o
+    condición de borde?) no puede alterar un resultado de cola, así que se elimina el único
+    componente arbitrario del método sin costar nada donde importa.
+
+    with_family=True (K=4) queda disponible solo para la sub-ablación de profundidad.
+
+    Devuelve (paths [len(deck), K], K). Líneas en blanco → -1 (sin bias).
+    deck_char_paths() se conserva como fallback para la comparación fallback-vs-AST.
     """
+    K = AST_DEPTH_FAM if with_family else AST_DEPTH
     n = len(deck)
-    paths = np.full((n, AST_DEPTH), -1, dtype=np.int32)
+    paths = np.full((n, K), -1, dtype=np.int32)
     stmt = 0
     pos = 0
     for raw in deck.splitlines(keepends=True):
@@ -118,14 +134,18 @@ def ast_char_paths(deck: str) -> tuple[np.ndarray, int]:
         name_end = name_start + len(body[name_start:].split(None, 1)[0]) if body[name_start:].strip() else len(body)
 
         a = pos + lead
-        paths[a:pos + len(raw), 0] = fam
-        paths[a:pos + len(raw), 1] = kid
-        paths[a:pos + len(raw), 2] = stmt
-        paths[a:a + w0, 3] = 0
-        paths[a + w0:a + name_end, 3] = 1
-        paths[a + name_end:pos + len(raw), 3] = 2
+        end = pos + len(raw)
+        c = 0
+        if with_family:
+            paths[a:end, 0] = fam
+            c = 1
+        paths[a:end, c] = kid
+        paths[a:end, c + 1] = stmt
+        paths[a:a + w0, c + 2] = 0                  # slot 0: la keyword
+        paths[a + w0:a + name_end, c + 2] = 1       # slot 1: el nombre
+        paths[a + name_end:end, c + 2] = 2          # slot 2: los argumentos
         pos += len(raw)
-    return paths, AST_DEPTH
+    return paths, K
 
 
 def deck_char_paths(deck: str) -> tuple[np.ndarray, int]:
@@ -166,8 +186,10 @@ def get_tree(name: str):
     if name == "fallback":
         return deck_char_paths, FALLBACK_DEPTH
     if name == "ast":
-        return ast_char_paths, AST_DEPTH
-    raise ValueError(f"árbol TSD desconocido: {name} (usa 'fallback' o 'ast')")
+        return ast_char_paths, AST_DEPTH                   # K=3, el defendible
+    if name == "ast-fam":
+        return (lambda d: ast_char_paths(d, with_family=True)), AST_DEPTH_FAM
+    raise ValueError(f"árbol TSD desconocido: {name} (usa 'fallback', 'ast' o 'ast-fam')")
 
 
 def token_paths(

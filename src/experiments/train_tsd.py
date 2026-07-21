@@ -64,8 +64,8 @@ def main() -> None:
                     help="sufija el output con -base/-tsd-<árbol> (para el 2x2)")
     ap.add_argument("--lam", type=float, default=1.0, help="fuerza del bias TSD (λ)")
     ap.add_argument("--kernel", default="linear", choices=["linear", "padic"])
-    ap.add_argument("--tree", default="fallback", choices=["fallback", "ast"],
-                    help="fallback=bloque/línea (K=2, histórico) · ast=SEAM 2 real (K=4)")
+    ap.add_argument("--tree", default="fallback", choices=["fallback", "ast", "ast-fam"],
+                    help="fallback=bloque/línea (K=2) · ast=SEAM 2 (K=3, defendible) · ast-fam=+familia (K=4, solo sub-ablación)")
     ap.add_argument("--no-norm", action="store_true",
                     help="NO normalizar D por K (reproduce las corridas históricas; "
                          "rompe la comparabilidad de λ entre árboles de distinta profundidad)")
