@@ -64,10 +64,8 @@ fix_hf_tokenizer(){  # $1=model_dir  $2=base_id (org/name)
 }
 
 # --- export HF dir → gguf f16 + Q4 --------------------------------------------
-export_nano(){   # tokenizer custom → usa el script con parches
-  bash scripts/export_gguf.sh models/ndx-coder-small "$OUT" && \
-    mv -f "$OUT/ndx-coder-small-f16.gguf"    "$OUT/ndx-coder-nano-215m-f16.gguf" 2>/dev/null; \
-    mv -f "$OUT/ndx-coder-small-Q4_K_M.gguf" "$OUT/ndx-coder-nano-215m-Q4_K_M.gguf" 2>/dev/null; true
+export_nano(){   # tokenizer custom → usa el script con parches (ya nombra ndx-coder-nano-215m-*)
+  bash scripts/export_gguf.sh models/ndx-coder-nano-215m "$OUT"
 }
 export_pretrained(){  # $1=model_dir $2=base_id $3=nombre-familia
   local dir="$1" base="$2" name="$3"
@@ -90,7 +88,10 @@ setup
 log "===== MODO: $MODE ====="
 
 # --- TRACK B: familia de PRODUCCIÓN (con repair mixing) — nano PRIMERO --------
-run prod-nano          python -m src.train_scratch --config configs/ndx_coder.yaml           $SMOKE_ARGS
+# nano via train_tsd: enmascara el prompt (loss SOLO en el assistant). NO train_scratch:
+# TRL entrena la secuencia completa + packing → con repair mezclado el modelo aprende a
+# emitir el texto de USUARIO ("El compilador rechazó el deck…") en vez del deck.
+run prod-nano          python -m src.train_tsd     --config configs/coder_nano.yaml          $SMOKE_ARGS
 run prod-gemma3-270m   python -m src.train_tsd     --config configs/coder_gemma3_270m.yaml   $SMOKE_ARGS
 run prod-granite-350m  python -m src.train_tsd     --config configs/coder_granite_350m.yaml  $SMOKE_ARGS
 run prod-qwen3-0.6b    python -m src.train_tsd     --config configs/coder_qwen3_06b.yaml     $SMOKE_ARGS
