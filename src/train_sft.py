@@ -193,13 +193,14 @@ def build_training_args(cfg, args, out, tag, keep_cols=False):
         save_total_limit=t.get("save_total_limit", 1),    # no acumular checkpoints (disco)
         seed=(getattr(args, "seed", None) or t["seed"]),
         # El collator TSD arma la matriz ultramétrica en numpy, en el proceso principal:
-        # medido, ~215 ms por ejemplo a seq 2048, o sea ~1,7 s por batch de 8. Con 0 workers
-        # (el default de HF) la GPU se queda esperando al dataloader — se veía como
-        # GPU-Util 1% y el brazo TSD 1,7x más lento que el base. Con workers, la colación
-        # se solapa con el cómputo.
-        # NO cambia resultados: el sampler va sembrado, así que los batches son los mismos;
-        # solo cambia quién los prepara y cuándo.
-        dataloader_num_workers=t.get("dataloader_num_workers", 4),
+        # ~215 ms por ejemplo a seq 2048 (~1,7 s por batch de 8). Con 0 workers la GPU
+        # esperaba al dataloader (GPU-Util 1%, brazo TSD 1,7x más lento). 2 workers lo
+        # solapan con el cómputo. persistent_workers evita re-forkear en cada epoch, que
+        # multiplica los procesos hijo que tardan en morir en el teardown — y ese teardown
+        # lento fue lo que retuvo la GPU y solapó corridas de qwen3 (por eso run_2a espera
+        # a la GPU entre corridas). NO cambia resultados: sampler sembrado, batches iguales.
+        dataloader_num_workers=t.get("dataloader_num_workers", 2),
+        dataloader_persistent_workers=(t.get("dataloader_num_workers", 2) > 0),
         report_to=t.get("report_to", "none"),
         # keep_cols: el experimento necesita que paths/in_deck lleguen al collator.
         remove_unused_columns=not keep_cols,

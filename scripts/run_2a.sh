@@ -28,12 +28,32 @@ FAILS=(); HECHAS=0; SALTADAS=0
 
 log(){ echo "[$(date +%H:%M:%S)] $*"; }
 
+# Espera a que la GPU tenga NEED MiB libres antes de lanzar la siguiente corrida.
+# EL SCRIPT ES SECUENCIAL, pero `python -m` devuelve el control al shell cuando main()
+# termina, y el proceso tarda en SOLTAR la memoria de GPU en el teardown (más aún con
+# dataloader workers). Sin esta espera, la corrida N+1 arranca sobre los ~24 GB que la N
+# todavía no liberó: en el nano da igual (dos caben), pero qwen3 necesita ~24 de 32 GB y
+# la segunda muere por OOM. Ese fue el fallo que perdió 4 corridas de qwen3.
+esperar_gpu(){
+  local need="${1:-26000}" i free
+  command -v nvidia-smi >/dev/null || return 0          # local sin GPU: no bloquea
+  for i in $(seq 1 100); do                              # ~5 min de techo
+    free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1)
+    [ -z "$free" ] && return 0
+    [ "$free" -ge "$need" ] && return 0
+    [ $((i % 5)) -eq 1 ] && log "  … GPU: ${free} MiB libres, espero ${need} (la corrida anterior aún libera)"
+    sleep 3
+  done
+  log "  ! la GPU no se liberó tras 5 min — lanzo igual, puede dar OOM"
+}
+
 # $1=etiqueta $2=config $3=output_dir esperado $4...=flags extra
 correr(){
   local tag="$1" cfg="$2" out="$3"; shift 3
   if [ -f "$out/model.safetensors" ] && [ -f "$out/tsd_config.json" ]; then
     log "· $tag ya está — salto"; SALTADAS=$((SALTADAS+1)); return 0
   fi
+  esperar_gpu 26000                    # qwen3 necesita ~24 GB; no arrancar sobre restos
   log "▶ $tag"
   python -m "$E" --config "$cfg" $A "$@" > "$LOG/$tag.log" 2>&1
   local rc=$?
