@@ -2,6 +2,7 @@
 
 # Instrucciones internas (privadas, no versionar)
 CLAUDE.md
+EXPERIMENTS.md
 
 # Datasets (grandes / privados)
 datasets/
