@@ -63,6 +63,27 @@ fix_hf_tokenizer(){  # $1=model_dir  $2=base_id (org/name)
   done
 }
 
+# --- config fix: transformers 5 DROPS campos al re-guardar ---------------------
+# Caso granite-4.0-350m: se pierde `layer_types` (28 x "attention") → el converter
+# asume TODAS las capas recurrentes (head_count_kv=[0]*28) y emite arch granitehybrid
+# sin tensores ssm → llama.cpp: "missing tensor blk.0.ssm_in.weight".
+# El fine-tune NO cambia la arquitectura → restauramos las claves que falten del base.
+fix_hf_config(){  # $1=model_dir  $2=base_id
+  local dir="$1" base="$2"
+  local snap; snap=$(ls -d ~/.cache/huggingface/hub/models--${base//\//--}/snapshots/*/ 2>/dev/null | head -1)
+  [ -n "$snap" ] && [ -f "$snap/config.json" ] || return 0
+  python - "$dir/config.json" "$snap/config.json" <<'PY'
+import json, sys
+out, ref = sys.argv[1], sys.argv[2]
+a = json.load(open(out, encoding="utf-8")); b = json.load(open(ref, encoding="utf-8"))
+missing = [k for k in b if k not in a]
+for k in missing: a[k] = b[k]
+if missing:
+    json.dump(a, open(out, "w", encoding="utf-8"), indent=2)
+    print("config restaurado:", missing)
+PY
+}
+
 # --- export HF dir → gguf f16 + Q4 --------------------------------------------
 export_nano(){   # tokenizer custom → usa el script con parches (ya nombra ndx-coder-nano-215m-*)
   bash scripts/export_gguf.sh models/ndx-coder-nano-215m "$OUT"
@@ -71,6 +92,7 @@ export_pretrained(){  # $1=model_dir $2=base_id $3=nombre-familia
   local dir="$1" base="$2" name="$3"
   [ -d "$dir" ] || { log "  (no existe $dir, skip export)"; return 1; }
   fix_hf_tokenizer "$dir" "$base"
+  fix_hf_config    "$dir" "$base"
   python "$LLAMA/convert_hf_to_gguf.py" "$dir" --outfile "$OUT/$name-f16.gguf" --outtype f16 && \
     "$LLAMA/build/bin/llama-quantize" "$OUT/$name-f16.gguf" "$OUT/$name-Q4_K_M.gguf" Q4_K_M
 }
