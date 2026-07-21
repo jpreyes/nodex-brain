@@ -172,7 +172,12 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     for nombre, items in (("train.jsonl", train), ("val.jsonl", val),
                           ("test_a.jsonl", test_a), ("test_b.jsonl", test_b)):
-        with open(os.path.join(args.out, nombre), "w", encoding="utf-8") as fh:
+        # newline LF explicito: en Windows open(...,"w") traduce el salto de linea a
+        # CRLF, asi que el mismo script producia BYTES distintos segun la plataforma
+        # -- contenido identico, sha256 distinto entre el portatil y la caja. Como el
+        # split se verifica por hash, esto no es cosmetico: rompia la comprobacion.
+        with open(os.path.join(args.out, nombre), "w", encoding="utf-8",
+                  newline="\n") as fh:
             for ex, _d, _s, _sf in items:
                 fh.write(json.dumps(ex, ensure_ascii=False) + "\n")
 
@@ -201,7 +206,7 @@ def main():
                        "kinds_perdidos": kinds_perdidos},
         "CONGELADO": "no regenerar. Si cambia el corpus, crear un split nuevo con otro nombre.",
     }
-    with open(os.path.join(args.out, "MANIFEST.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(args.out, "MANIFEST.json"), "w", encoding="utf-8", newline="\n") as fh:
         json.dump(manifest, fh, ensure_ascii=False, indent=2)
 
     # Ejemplos de COLA por test: es lo que fija la potencia de la métrica (§13.5/E9, §19.3).
