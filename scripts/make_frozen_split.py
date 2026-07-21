@@ -84,6 +84,8 @@ def main():
                          "pregunta estructural la unidad de análisis es la firma, no el "
                          "ejemplo (§19.3)")
     ap.add_argument("--test-a-pct", type=int, default=12)
+    ap.add_argument("--val-pct", type=int, default=5,
+                    help="%% del resto para validación durante el entrenamiento. Sale del train, NUNCA de Test A")
     args = ap.parse_args()
 
     # 1. Pool: train + val JUNTOS. El val viejo filtra (§5), así que se disuelve y se
@@ -140,8 +142,12 @@ def main():
     # 5. Test A: `--test-a-pct` % del resto, por hash del deck.
     resto = [i for s, items in por_firma.items() if s not in set(test_b_sigs) for i in items]
     test_a = [i for i in resto if h(i[1]) % 100 < args.test_a_pct]
-    train = [i for i in resto if h(i[1]) % 100 >= args.test_a_pct]
-    print(f"Test A: {len(test_a)} ejemplos · train: {len(train)} ejemplos")
+    # VAL sale del train, no de Test A. Usar Test A como eval durante el entrenamiento sería
+    # seleccionar checkpoints sobre el test: el número final ya no sería honesto.
+    lo, hi = args.test_a_pct, args.test_a_pct + args.val_pct
+    val = [i for i in resto if lo <= h(i[1]) % 100 < hi]
+    train = [i for i in resto if h(i[1]) % 100 >= hi]
+    print(f"Test A: {len(test_a)} · val: {len(val)} · train: {len(train)}")
 
     # 6. Comprobaciones que deben pasar SIEMPRE. Si alguna falla, el split no sirve.
     decks_train = {i[1] for i in train}
@@ -164,7 +170,8 @@ def main():
 
     # 7. Escribir. Formato `messages`, igual que la fuente.
     os.makedirs(args.out, exist_ok=True)
-    for nombre, items in (("train.jsonl", train), ("test_a.jsonl", test_a), ("test_b.jsonl", test_b)):
+    for nombre, items in (("train.jsonl", train), ("val.jsonl", val),
+                          ("test_a.jsonl", test_a), ("test_b.jsonl", test_b)):
         with open(os.path.join(args.out, nombre), "w", encoding="utf-8") as fh:
             for ex, _d, _s, _sf in items:
                 fh.write(json.dumps(ex, ensure_ascii=False) + "\n")
@@ -185,6 +192,7 @@ def main():
                    "mide": "estructuras nunca vistas",
                    "requiere": "reentrenar con este train.jsonl; un modelo entrenado sobre el corpus completo NO puede evaluarse contra B"},
         "train": {"n": len(train), "firmas": len(sigs_train)},
+        "val": {"n": len(val), "mide": "validación DURANTE el entrenamiento; sale del train, nunca de Test A"},
         "firmas_test_b": test_b_sigs,
         "kinds_monopolio_protegidos": monopolios,
         "comprobado": {"fuga_exacta_a": fuga_a, "fuga_exacta_b": fuga_b,
@@ -201,7 +209,7 @@ def main():
             "diaphragm", "fiber", "heatBC", "link", "nonlinear", "slab", "soil", "solid",
             "spectrum", "wall"}
     print("\nejemplos que usan al menos un kind de COLA (fija la potencia del recall):")
-    for nombre, items in (("Test A", test_a), ("Test B", test_b), ("train", train)):
+    for nombre, items in (("Test A", test_a), ("Test B", test_b), ("val", val), ("train", train)):
         n = sum(1 for i in items if set(i[2].split(",")) & COLA)
         print(f"  {nombre:7s} {n:6d} de {len(items):6d}")
 

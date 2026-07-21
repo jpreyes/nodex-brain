@@ -29,6 +29,9 @@ bad(){ echo "  ✗ $*"; FAILS+=("$*"); }
 hr(){ echo; echo "=============================================================="; echo "$1"; echo "=============================================================="; }
 
 # --- 1. PRODUCCIÓN ------------------------------------------------------------
+# Producción usa el corpus COMPLETO (coder_*.yaml), a propósito: más datos = mejor modelo,
+# y no se evalúa contra Test A/B. Los experimentos usan exp_*.yaml, que apuntan al split
+# congelado — entrenar el 2x2 con el corpus completo invalidaría los dos tests.
 hr "[1] producción — src.train_sft"
 if python -m src.train_sft --config configs/coder_nano.yaml $TINY > "$LOG/prod.log" 2>&1; then
   ok "corrió sin error"
@@ -40,13 +43,13 @@ fi
 
 # --- 2. EXPERIMENTO base ------------------------------------------------------
 hr "[2] experimento — brazo base (sin bias)"
-python -m src.experiments.train_tsd --config configs/coder_nano.yaml --ablation $TINY \
+python -m src.experiments.train_tsd --config configs/exp_nano.yaml --ablation $TINY \
   > "$LOG/exp_base.log" 2>&1 \
   && ok "corrió sin error" || { bad "brazo base falló"; tail -15 "$LOG/exp_base.log"; }
 
 # --- 3. EXPERIMENTO +TSD con el árbol AST ------------------------------------
 hr "[3] experimento — brazo +TSD, árbol ast (K=3)"
-if python -m src.experiments.train_tsd --config configs/coder_nano.yaml --ablation --tsd \
+if python -m src.experiments.train_tsd --config configs/exp_nano.yaml --ablation --tsd \
      --tree ast $TINY > "$LOG/exp_tsd.log" 2>&1; then
   ok "corrió sin error"
   FRAC=$(grep -oE "frac in_deck=[0-9.]+" "$LOG/exp_tsd.log" | head -1 | cut -d= -f2)
@@ -66,7 +69,7 @@ fi
 
 # --- 4. simetría train/infer --------------------------------------------------
 hr "[4] tsd_config.json — el puente train/infer"
-CFG=models/ndx-coder-nano-215m-tsd-ast/tsd_config.json
+CFG=models/exp-nano-215m-tsd-ast/tsd_config.json
 if [ -f "$CFG" ]; then
   cat "$CFG" | sed 's/^/     /'
   python - "$CFG" <<'PY' && ok "config coherente con lo entrenado" || bad "tsd_config.json incoherente"
@@ -82,7 +85,7 @@ fi
 
 # --- 5. el verificador del bias ----------------------------------------------
 hr "[5] verify_tsd_bias --tree ast"
-python -m src.experiments.verify_tsd_bias --config configs/coder_nano.yaml --tree ast \
+python -m src.experiments.verify_tsd_bias --config configs/exp_nano.yaml --tree ast \
   --skip-weights > "$LOG/verify.log" 2>&1 \
   && ok "4/4 PASS" || { bad "el verificador falló"; tail -25 "$LOG/verify.log"; }
 
