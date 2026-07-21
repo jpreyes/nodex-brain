@@ -2,7 +2,7 @@
 
 Solo nano-coder. Se corre en la caja, donde están los checkpoints.
 
-    python scripts/verify_tsd_bias.py --config configs/coder_nano.yaml
+    python -m src.experiments.verify_tsd_bias --config configs/coder_nano.yaml
 
 Tres chequeos independientes; los tres deben pasar:
 
@@ -28,18 +28,18 @@ import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
 import torch
 from datasets import load_dataset
 
-from src.config import load_config
-from src.train_scratch import build_model, build_tokenizer
-from src.train_tsd import make_preprocess
-from src.tsd.collator import NEG_INF, TSDCollator
-from src.tsd.ultrametric import FALLBACK_DEPTH, ultrametric_matrix
+from ..config import load_config
+from ..train_scratch import build_model, build_tokenizer
+from ..train_sft import make_preprocess
+from ..tsd.collator import NEG_INF, TSDCollator
+from ..tsd.ultrametric import get_tree, ultrametric_matrix
+from .train_tsd import make_tsd_extra
 
 OK, BAD = "PASS", "FAIL"
 
@@ -101,8 +101,10 @@ def check_forward(model, feats, K, lam, kernel, pad_id, dtype):
     eff = getattr(model.config, "_attn_implementation", "?")
     print(f"  attn_implementation      : {eff}   <- debe ser 'eager'")
 
-    base_col = TSDCollator(pad_token_id=pad_id, use_tsd=False, K=K)
-    tsd_col = TSDCollator(pad_token_id=pad_id, use_tsd=True, lam=lam, kernel=kernel, K=K)
+    # norm=False reproduce las corridas históricas (la normalización por K es posterior).
+    base_col = TSDCollator(pad_token_id=pad_id, use_tsd=False, K=K, norm=False)
+    tsd_col = TSDCollator(pad_token_id=pad_id, use_tsd=True, lam=lam, kernel=kernel,
+                          K=K, norm=False)
 
     batch = feats[:2]
     b_base, b_tsd = base_col(batch), tsd_col(batch)
@@ -149,11 +151,16 @@ def check_weights(out_dir):
     hr("[3] PESOS -base vs -tsd")
     from transformers import AutoModelForCausalLM
 
-    pa, pb = f"{out_dir}-base", f"{out_dir}-tsd"
-    for p in (pa, pb):
-        if not os.path.isdir(p):
-            print(f"  {p} no existe -> chequeo OMITIDO (¿corriste el 2x2 con --ablation?)")
-            return None
+    pa = f"{out_dir}-base"
+    # "-tsd" = nombre histórico; "-tsd-<árbol>" = esquema nuevo (fallback/ast no se pisan)
+    pb = next((p for p in (f"{out_dir}-tsd", f"{out_dir}-tsd-fallback", f"{out_dir}-tsd-ast")
+               if os.path.isdir(p)), None)
+    if not os.path.isdir(pa) or pb is None:
+        print(f"  falta {pa} y/o el checkpoint -tsd -> chequeo OMITIDO.")
+        print("  Causa probable: el 2x2 corrió SIN --ablation (TRAIN_ALL.md §A antiguo),")
+        print("  así que ambas corridas escribieron en el mismo dir y la base se perdió.")
+        return None
+    print(f"  comparando {pa}  vs  {pb}")
 
     ma = AutoModelForCausalLM.from_pretrained(pa, dtype=torch.float32)
     mb = AutoModelForCausalLM.from_pretrained(pb, dtype=torch.float32)
@@ -189,6 +196,8 @@ def main():
     ap.add_argument("--n", type=int, default=64, help="ejemplos a analizar")
     ap.add_argument("--lam", type=float, default=1.0)
     ap.add_argument("--kernel", default="linear", choices=["linear", "padic"])
+    ap.add_argument("--tree", default="fallback", choices=["fallback", "ast"],
+                    help="DEJAR EN fallback para diagnosticar lo ya corrido; 'ast' es SEAM 2")
     ap.add_argument("--skip-weights", action="store_true")
     args = ap.parse_args()
 
@@ -196,20 +205,23 @@ def main():
     if cfg["model"].get("name_or_path"):
         sys.exit("Este verificador es para el nano from-scratch. Usa configs/coder_nano.yaml.")
 
-    K = FALLBACK_DEPTH
-    print(f"config={args.config}  K={K}  lam={args.lam}  kernel={args.kernel}")
-    if K == FALLBACK_DEPTH:
-        print("AVISO: K == FALLBACK_DEPTH -> SEAM 2 sigue en fallback (bloque por línea en")
-        print("       blanco). Esto verifica la MECÁNICA del bias, no la hipótesis del AST.")
+    _, K = get_tree(args.tree)
+    print(f"config={args.config}  árbol={args.tree}  K={K}  lam={args.lam}  kernel={args.kernel}")
+    if args.tree == "fallback":
+        print("AVISO: árbol=fallback (bloque por línea en blanco). Esto verifica la MECÁNICA")
+        print("       del bias, no la hipótesis del AST. Sobre decks reales el fallback")
+        print("       promedia 2.1 niveles de distancia -> es casi un indicador binario de")
+        print("       'misma línea o no'. Correcto para diagnosticar lo ya corrido.")
 
     tok = build_tokenizer(cfg["tokenizer"])
     ds = load_dataset("json", data_files={"train": cfg["data"]["train"]})["train"]
     ds = ds.select(range(min(args.n, len(ds))))
-    pp = make_preprocess(tok, cfg["data"]["max_seq_length"])
+    pp = make_preprocess(tok, cfg["data"]["max_seq_length"], extra=make_tsd_extra(args.tree))
     feats = [pp(ex) for ex in ds]
 
     r1 = check_structure(feats, K)
 
+    # eager igual que el experimento: si no, SDPA descartaría la máscara 4D sin avisar.
     cfg["model"]["attn_implementation"] = "eager"
     model = build_model(cfg, vocab_size=len(tok))
     if torch.cuda.is_available():
