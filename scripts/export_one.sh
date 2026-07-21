@@ -29,43 +29,45 @@ log(){ echo "[$(date +%H:%M:%S)] $*"; }
 DIR="${1:?falta <model_dir>}"; BASE="${2:?falta <base_id>}"; NAME="${3:?falta <nombre-familia>}"
 [ -d "$DIR" ] || { log "no existe $DIR"; exit 1; }
 
-# transformers 5 pierde campos al re-guardar. Dos parches, mismos que run_all.sh:
-#  - tokenizer: guarda tokenizer_class="TokenizersBackend" y a veces pierde vocab/merges.
-#  - config: p.ej. granite pierde `layer_types` (28 x "attention") → el converter marca
-#    las 28 capas como recurrentes y emite granitehybrid SIN tensores ssm → llama.cpp
-#    falla con "missing tensor blk.0.ssm_in.weight". El fine-tune no cambia la
-#    arquitectura, así que restauramos del cache de HF lo que falte.
-SNAP=$(ls -d ~/.cache/huggingface/hub/models--${BASE//\//--}/snapshots/*/ 2>/dev/null | head -1)
-if [ -n "$SNAP" ]; then
-  for t in tokenizer.json tokenizer_config.json special_tokens_map.json added_tokens.json vocab.json merges.txt tokenizer.model; do
-    [ -f "$SNAP/$t" ] && cp -f "$SNAP/$t" "$DIR/$t"
-  done
-  [ -f "$SNAP/config.json" ] && python - "$DIR/config.json" "$SNAP/config.json" <<'PY'
-import json, sys
-out, ref = sys.argv[1], sys.argv[2]
-a = json.load(open(out, encoding="utf-8")); b = json.load(open(ref, encoding="utf-8"))
-missing = [k for k in b if k not in a]
-for k in missing: a[k] = b[k]
-if missing:
-    json.dump(a, open(out, "w", encoding="utf-8"), indent=2)
-    print("config restaurado:", missing)
-PY
-else
-  log "sin cache de HF para $BASE — exporto sin parches (puede fallar)"
-fi
+# transformers 5 pierde tokenizer y claves de config al re-guardar (ver fix_hf_export.py).
+# Si esto falla NO seguimos: convertir igual produce un gguf que no carga.
+log "reparando carpeta HF contra $BASE"
+python scripts/fix_hf_export.py "$DIR" "$BASE" || { log "no se pudo reparar $DIR — abortado"; exit 1; }
 
 log "convert → $OUT/$NAME-f16.gguf"
 python "$LLAMA/convert_hf_to_gguf.py" "$DIR" --outfile "$OUT/$NAME-f16.gguf" --outtype f16 || exit 1
 log "quantize → $OUT/$NAME-Q4_K_M.gguf"
 "$LLAMA/build/bin/llama-quantize" "$OUT/$NAME-f16.gguf" "$OUT/$NAME-Q4_K_M.gguf" Q4_K_M || exit 1
 
-# Verificación: el gguf debe traer su chat_template (nodex-code arma el prompt con ella;
-# sin plantilla el modelo queda fuera de distribución y el deck no sale).
-python - "$OUT/$NAME-Q4_K_M.gguf" <<'PY'
+# Verificación del gguf. Dos cosas que ya fallaron en silencio y costaron horas:
+#  - sin chat_template, nodex-code cae al fallback <|user|> y el modelo queda fuera de
+#    distribución (qwen3 daba 1/20 decks por esto).
+#  - un arch híbrido que declara capas recurrentes pero no trae tensores ssm NO CARGA
+#    ("missing tensor blk.0.ssm_in.weight"). Es el bug de granite: head_count_kv=[0]*N
+#    significa "todas las capas son mamba", y si no hay tensores ssm, mienten.
+python - "$OUT/$NAME-Q4_K_M.gguf" <<'PY' || { log "gguf INVÁLIDO — no lo entregues"; exit 1; }
 import sys, gguf
 r = gguf.GGUFReader(sys.argv[1])
 arch = str(r.fields["general.architecture"].contents())
+n_ssm = sum(1 for t in r.tensors if "ssm" in t.name)
 tpl = "tokenizer.chat_template" in r.fields
-print(f"OK  arch={arch}  tensores={len(r.tensors)}  chat_template={'SI' if tpl else 'NO (nodex-code usará el fallback <|user|>)'}")
+print(f"arch={arch}  tensores={len(r.tensors)}  ssm={n_ssm}  chat_template={'SI' if tpl else 'NO'}")
+
+bad = []
+if not tpl:
+    bad.append("sin tokenizer.chat_template -> nodex-code usaría el fallback <|user|>")
+kv = r.fields.get(f"{arch}.attention.head_count_kv")
+if kv is not None:
+    vals = list(kv.contents()) if hasattr(kv.contents(), "__len__") else [kv.contents()]
+    n_rec = sum(1 for v in vals if int(v) == 0)
+    if n_rec and not n_ssm:
+        bad.append(f"{n_rec}/{len(vals)} capas declaradas recurrentes pero 0 tensores ssm "
+                   f"-> el modelo NO va a cargar (config.json sin layer_types correcto)")
+if bad:
+    print("FALLA:")
+    for b in bad:
+        print("  -", b)
+    sys.exit(1)
+print("OK")
 PY
 log "listo: $NAME"
