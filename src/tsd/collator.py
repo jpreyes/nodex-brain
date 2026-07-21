@@ -19,18 +19,25 @@ NEG_INF = torch.finfo(torch.float32).min
 
 
 class TSDCollator:
-    def __init__(self, pad_token_id, use_tsd=True, lam=1.0, kernel="linear", p=2.0, K=FALLBACK_DEPTH):
+    def __init__(self, pad_token_id, use_tsd=True, lam=1.0, kernel="linear", p=2.0,
+                 K=FALLBACK_DEPTH, norm=True):
         self.pad_token_id = pad_token_id
         self.use_tsd = use_tsd
         self.lam = lam
         self.kernel = kernel
         self.p = p
         self.K = K
+        # norm=True → D se escala a [0,1], así λ significa lo mismo para K=2 y K=4.
+        # Sin esto, cambiar de árbol cambia la FUERZA del bias además de su estructura
+        # (D media 0.97 con fallback vs 3.42 con ast) y el Δ medido es inatribuible.
+        # Las corridas históricas fueron SIN normalizar (equivale a norm=False).
+        self.norm = norm
 
     def _bias(self, paths, in_deck, n):
         P = np.asarray(paths[:n], dtype=np.int32)          # [n,K]
         D = ultrametric_matrix(P, self.K)                  # [n,n]
-        B = kernel_bias(D, self.lam, self.kernel, self.p)  # [n,n] <=0
+        B = kernel_bias(D, self.lam, self.kernel, self.p,
+                        K=self.K if self.norm else None)   # [n,n] <=0
         idk = np.asarray(in_deck[:n], dtype=bool)
         both = idk[:, None] & idk[None, :]
         B[~both] = 0.0
