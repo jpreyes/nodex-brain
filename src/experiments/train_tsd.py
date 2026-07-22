@@ -76,6 +76,9 @@ def main() -> None:
     ap.add_argument("--kernel", default="linear", choices=["linear", "padic"])
     ap.add_argument("--tree", default="fallback", choices=["fallback", "ast", "ast-fam"],
                     help="fallback=bloque/línea (K=2) · ast=SEAM 2 (K=3, defendible) · ast-fam=+familia (K=4, solo sub-ablación)")
+    ap.add_argument("--resume", action="store_true",
+                    help="retoma desde el ultimo checkpoint-N del output_dir (si existe). "
+                         "Una corrida interrumpida al 80%% cuesta 1h de GPU si se rehace entera.")
     ap.add_argument("--no-norm", action="store_true",
                     help="NO normalizar D por K (reproduce las corridas históricas; "
                          "rompe la comparabilidad de λ entre árboles de distinta profundidad)")
@@ -122,7 +125,7 @@ def main() -> None:
         train_dataset=ds["train"], eval_dataset=ds["validation"],
         data_collator=collator, processing_class=tok,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume or None)
     trainer.save_model(out)
     tok.save_pretrained(out)
 
