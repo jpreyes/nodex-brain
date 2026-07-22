@@ -101,9 +101,43 @@ def _tsd_mask(prompt_len, gen_text, spans, tree, K, lam, kernel, p, norm, device
     return m.to(device)[None, None]
 
 
+def _paths_de(gen_text, spans, prompt_len, L, tree, K):
+    """paths[L,K] e in_deck[L] del estado actual. El prompt nunca recibe bias."""
+    d_off = gen_text.find(CoT_END) + len(CoT_END) if CoT_END in gen_text else 0
+    tree_fn, _ = get_tree(tree)
+    char_paths, _K = tree_fn(gen_text[d_off:])
+    paths = np.full((L, K), -1, dtype=np.int32)
+    in_deck = np.zeros(L, dtype=bool)
+    for t, start in enumerate(spans):
+        local = start - d_off
+        if 0 <= local < char_paths.shape[0] and char_paths[local, 0] >= 0:
+            paths[prompt_len + t] = char_paths[local]
+            in_deck[prompt_len + t] = True
+    return paths, in_deck
+
+
+def _bias_row(paths, in_deck, t, K, lam, kernel, p, norm):
+    """Fila del bias: el token t contra todos los anteriores. O(L·K), no O(L²·K).
+
+    Es lo que hace viable el KV-cache: con cache, cada paso solo atiende UNA consulta
+    (el token nuevo) contra todas las claves, así que basta esta fila. Recomputar la
+    matriz entera en cada paso costaba 63 h para los 6 brazos TSD del 2x2; con esto
+    bajan a ~4 h.
+    """
+    pt = paths[t]
+    eq = (paths == pt) & (paths != -1) & (pt != -1)[None, :]
+    cpl = np.cumprod(eq, axis=1).sum(axis=1)
+    D = (K - cpl).astype(np.float32)
+    B = kernel_bias(D, lam, kernel, p, K=K if norm else None)
+    B[~(in_deck & bool(in_deck[t]))] = 0.0
+    B[t] = 0.0
+    return B
+
+
 @torch.no_grad()
 def generate_tsd(model, tok, prompt: str, max_new_tokens: int = 512,
-                 tsd_cfg: dict | None = None, model_dir: str | None = None) -> str:
+                 tsd_cfg: dict | None = None, model_dir: str | None = None,
+                 use_cache: bool = True) -> str:
     """Genera con el MISMO bias con el que se entrenó el checkpoint.
 
     tsd_cfg   : dict de `load_tsd_config`. Si es None y se pasa model_dir, se lee de ahí.
@@ -127,17 +161,46 @@ def generate_tsd(model, tok, prompt: str, max_new_tokens: int = 512,
     prompt_len = len(prompt_ids)
     eos = tok.eos_token_id
 
+    # Sin bias no hay nada que rearmar: HF genera con KV-cache y es ~15x más rápido.
+    if not use_tsd:
+        out = model.generate(torch.tensor([prompt_ids], device=device),
+                             max_new_tokens=max_new_tokens, do_sample=False,
+                             pad_token_id=tok.pad_token_id or eos)
+        return tok.decode(out[0][prompt_len:], skip_special_tokens=True).strip()
+
     gen: list[int] = []
     spans: list[int] = []          # offset char inicial de cada token generado
     prev_len = 0
+    past = None
 
     for _ in range(max_new_tokens):
-        seq = torch.tensor([prompt_ids + gen], device=device)
-        mask = None
-        if use_tsd and gen:
-            mask = _tsd_mask(prompt_len, tok.decode(gen, skip_special_tokens=False),
-                             spans, tree, K, lam, kernel, p, norm, device)
-        logits = model(input_ids=seq, attention_mask=mask).logits[0, -1]
+        if use_cache:
+            if past is None:                       # 1er paso: el prompt entero, sin bias
+                out = model(input_ids=torch.tensor([prompt_ids], device=device),
+                            use_cache=True)
+            else:
+                # Solo el token nuevo. Su máscara es UNA fila [1,1,1,L]: la consulta
+                # atiende a todas las claves, así que basta el bias de ese token contra
+                # los anteriores. No hay que reconstruir la matriz [L,L].
+                L = prompt_len + len(gen)
+                paths, in_deck = _paths_de(tok.decode(gen, skip_special_tokens=False),
+                                           spans, prompt_len, L, tree, K)
+                row = _bias_row(paths, in_deck, L - 1, K, lam, kernel, p, norm)
+                m = torch.from_numpy(row).to(device)[None, None, None, :]
+                out = model(input_ids=torch.tensor([[gen[-1]]], device=device),
+                            past_key_values=past, attention_mask=m, use_cache=True)
+            past = out.past_key_values
+            logits = out.logits[0, -1]
+        else:
+            # Ruta de REFERENCIA, O(n²): recomputa todo en cada paso. Solo para el test
+            # de equivalencia — es la que costaba 63 h en el 2x2.
+            seq = torch.tensor([prompt_ids + gen], device=device)
+            mask = None
+            if gen:
+                mask = _tsd_mask(prompt_len, tok.decode(gen, skip_special_tokens=False),
+                                 spans, tree, K, lam, kernel, p, norm, device)
+            logits = model(input_ids=seq, attention_mask=mask).logits[0, -1]
+
         nxt = int(logits.argmax())
         if nxt == eos:
             break
