@@ -86,8 +86,16 @@ esperar_gpu(){
 # $1=etiqueta $2=config $3=output_dir esperado $4...=flags extra
 correr(){
   local tag="$1" cfg="$2" out="$3"; shift 3
+  # "Completa" exige además CHECKPOINTS dentro: un entrenamiento real (2043 pasos,
+  # save_steps 500) los deja; uno de 3 pasos, no. Sin esto, un smoke que escribiera en la
+  # misma carpeta dejaría model.safetensors + tsd_config y esta corrida se saltaría con un
+  # modelo basura dentro — pasó, y solo se vio al generar (recall 0.000, puras comas).
   if [ -f "$out/model.safetensors" ] && [ -f "$out/tsd_config.json" ]; then
-    log "· $tag ya está — salto"; SALTADAS=$((SALTADAS+1)); return 0
+    if ls -d "$out"/checkpoint-* >/dev/null 2>&1; then
+      log "· $tag ya está — salto"; SALTADAS=$((SALTADAS+1)); return 0
+    fi
+    log "! $tag tiene modelo pero NINGÚN checkpoint: parece de un smoke. Lo rehago."
+    rm -rf "$out"
   fi
   # Corrida interrumpida con checkpoints dentro: retomar en vez de repetir desde cero.
   # La que murió al 80% dejó checkpoint-1500 y se rehízo entera — 1h de GPU tirada.
