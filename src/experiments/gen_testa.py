@@ -58,7 +58,10 @@ def main() -> None:
     ap.add_argument("--split", default=SPLIT)
     ap.add_argument("--out", default=None, help="por defecto: eval/<nombre-del-modelo>.jsonl")
     ap.add_argument("--cabeza", type=int, default=700, help="cuántos de cabeza (la cola va entera)")
-    ap.add_argument("--max-new", type=int, default=512)
+    ap.add_argument("--max-new", type=int, default=768,
+                    help="TECHO, no objetivo: el modelo para en EOS. Los targets reales son "
+                         "de ~237 tokens de media (p99 431), pero 512 truncaba los largos "
+                         "-- y un deck truncado baja el recall sin que nada avise.")
     ap.add_argument("--limit", type=int, default=None, help="para probar el pipeline")
     args = ap.parse_args()
 
