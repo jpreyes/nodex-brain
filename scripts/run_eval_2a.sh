@@ -22,16 +22,27 @@ export PYTHONIOENCODING=utf-8
 BRAIN="${BRAIN:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$BRAIN"
 LOG="logs/eval"; mkdir -p "$LOG" eval
-CABEZA="${CABEZA:-700}"     # estratificado completo. La cola va ENTERA siempre.
+# La COLA va entera siempre (567): es la que decide. La cabeza es contraste, y cuesta.
+# MEDIDO en la primera tanda: 5 s/generación en nano y 13 s en qwen3 — no los 0.4 s
+# estimados, porque se genera de a uno sin batching. Con cabeza 700 en los 12 modelos el
+# total salía ~44 h, y la instancia no aguanta eso.
+#
+# Los brazos TSD van SOLO con la cola: el recall de cola se calcula sobre los MISMOS 567
+# ejemplos en ambos brazos, así que la comparación base-vs-TSD —el número que decide— sigue
+# siendo válida. Lo único que se pierde es el contraste de cabeza en los TSD, que era
+# descriptivo. Ahorra ~11 h.
+CABEZA_BASE="${CABEZA_BASE:-700}"
+CABEZA_TSD="${CABEZA_TSD:-0}"
 FALLOS=()
 
 log(){ echo "[$(date +%H:%M:%S)] $*"; }
 
 generar(){
-  local m="$1" name; name=$(basename "$m")
+  local m="$1" name c; name=$(basename "$m")
   [ -d "$m" ] || { log "· $name no existe — salto"; return 0; }
-  log "▶ $name"
-  if python -m src.experiments.gen_testa --model "$m" --cabeza "$CABEZA" \
+  case "$name" in *tsd*) c="$CABEZA_TSD" ;; *) c="$CABEZA_BASE" ;; esac
+  log "▶ $name (cabeza=$c)"
+  if python -m src.experiments.gen_testa --model "$m" --cabeza "$c" \
        > "$LOG/$name.log" 2>&1; then
     log "  ✓ $name  ($(wc -l < "eval/$name.jsonl") pares)"
   else
@@ -40,7 +51,7 @@ generar(){
   fi
 }
 
-log "===== generación sobre Test A (cola completa + $CABEZA de cabeza) ====="
+log "===== Test A: cola 567 · cabeza base=$CABEZA_BASE tsd=$CABEZA_TSD ====="
 
 # 1) los BASE primero: baratos, y aseguran media tabla si algo se cae
 for s in 42 1337 7; do
